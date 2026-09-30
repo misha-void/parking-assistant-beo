@@ -18,9 +18,12 @@ st.set_page_config(
 st.title("🚗 Parking Lot Assistant")
 st.caption("Ask me anything about our parking facility!")
 
-# Initialize chat history in session state
+# Initialize chat history and session ID in session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "session_id" not in st.session_state:
+    import uuid
+    st.session_state.session_id = str(uuid.uuid4())
 
 # Display chat history
 for message in st.session_state.messages:
@@ -39,11 +42,12 @@ if prompt := st.chat_input("How can I help you today?"):
     # Get assistant response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            # Run async function in sync context (Streamlit requirement)
+            # Run async function with session ID for state tracking
             response = asyncio.run(
                 process_chat_message(
                     user_message=prompt,
-                    chat_history=st.session_state.messages[:-1]  # Exclude the just-added user message
+                    session_id=st.session_state.session_id,
+                    chat_history=st.session_state.messages[:-1]
                 )
             )
             st.markdown(response)
