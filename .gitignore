@@ -63,3 +63,6 @@ htmlcov/
 # Project-specific
 /data/raw/  # If we add raw data files
 /data/processed/
+
+# Decision docs (personal notes only)
+docs/decisions/

@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Delta City Garage",
+    "type": "garage",
+    "zone": null,
+    "address": "Jurija Gagarina 16, Novi Beograd",
+    "capacity": 800,
+    "latitude": 44.8087,
+    "longitude": 20.4142,
+    "description": "Large multi-level garage at Delta City shopping mall"
+  },
+  {
+    "name": "Kalemegdan Car Park",
+    "type": "car_park",
+    "zone": "purple_a",
+    "address": "Tadeuša Košćuška, Stari Grad",
+    "capacity": 120,
+    "latitude": 44.8225,
+    "longitude": 20.4504,
+    "description": "Outdoor parking near Kalemegdan Fortress"
+  },
+  {
+    "name": "City Center Reserved Garage",
+    "type": "reserved_garage",
+    "zone": null,
+    "address": "Kneza Miloša 7, Savski Venac",
+    "capacity": 300,
+    "latitude": 44.8054,
+    "longitude": 20.4565,
+    "description": "Premium garage with advance booking - business district"
+  },
+  {
+    "name": "UŠĆE Shopping Center Garage",
+    "type": "garage",
+    "zone": null,
+    "address": "Bulevar Mihajla Pupina 4, Novi Beograd",
+    "capacity": 2500,
+    "latitude": 44.8166,
+    "longitude": 20.4347,
+    "description": "Massive underground garage at UŠĆE shopping mall, 24/7 access"
+  },
+  {
+    "name": "Trg Republike Street Parking",
+    "type": "car_park",
+    "zone": "white_b",
+    "address": "Vasina Street, Stari Grad",
+    "capacity": 45,
+    "latitude": 44.8160,
+    "longitude": 20.4600,
+    "description": "On-street parking near Republic Square, 2-hour maximum"
+  },
+  {
+    "name": "Slavija Square Car Park",
+    "type": "car_park",
+    "zone": "yellow_2",
+    "address": "Beogradska Street, Vračar",
+    "capacity": 75,
+    "latitude": 44.8012,
+    "longitude": 20.4698,
+    "description": "Open-air parking near Slavija, 2-hour limit with extension"
+  },
+  {
+    "name": "Clinical Centre Parking - Pasterova",
+    "type": "car_park",
+    "zone": "green_3",
+    "address": "Pasterova Street, Savski Venac",
+    "capacity": 120,
+    "latitude": 44.8045,
+    "longitude": 20.4755,
+    "description": "Free after 5 PM on weekdays, serves hospital visitors and staff"
+  },
+  {
+    "name": "Belgrade Arena Garage",
+    "type": "reserved_garage",
+    "zone": null,
+    "address": "Bulevar Arsenija Čarnojevića 58, Novi Beograd",
+    "capacity": 400,
+    "latitude": 44.7938,
+    "longitude": 20.4253,
+    "description": "Event parking garage with advance booking, used for concerts and sports events"
+  }
+]
