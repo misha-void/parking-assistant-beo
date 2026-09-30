@@ -1,0 +1,15 @@
+# Core LangChain dependencies
+langchain==0.3.14
+langchain-openai==0.2.14
+langgraph==0.2.60
+
+# Web frameworks
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+streamlit==1.41.1
+
+# Environment management
+python-dotenv==1.0.1
+
+# Pydantic for FastAPI models
+pydantic==2.10.4
