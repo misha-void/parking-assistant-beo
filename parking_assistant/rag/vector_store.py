@@ -38,8 +38,11 @@ class MilvusVectorStorage:
         Args:
             embedding_model: OpenAIEmbeddings instance (if None, creates default)
         """
-        # Use Milvus Lite (embedded, file-based)
-        self.milvus_uri = os.getenv("MILVUS_URI", "./milvus_data/parking_assistant.db")
+        # Use Milvus Lite (embedded, file-based).
+        # NOTE: the env var is MILVUS_DB_PATH, not MILVUS_URI — pymilvus reserves
+        # MILVUS_URI for its own default (http) connection and fails to import if
+        # it is set to a local file path.
+        self.milvus_uri = os.getenv("MILVUS_DB_PATH", "./milvus_data/parking_assistant.db")
 
         # Milvus Lite needs the parent directory to exist beforehand
         Path(self.milvus_uri).parent.mkdir(parents=True, exist_ok=True)

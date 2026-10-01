@@ -12,7 +12,7 @@ import sys
 import json
 import random
 from pathlib import Path
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,11 +20,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from parking_assistant.db.database import init_db, SessionLocal
 from parking_assistant.db.models import (
     ParkingLocation, ParkingType, ParkingZone,
-    PriceRule, WorkingHours, Availability
+    PriceRule, WorkingHours, Availability, Reservation
 )
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def clear_existing(session):
+    """Wipe dynamic tables so the seed can be re-run without UNIQUE/FK errors."""
+    print("🧹 Clearing existing data...")
+    for model in (Availability, Reservation, WorkingHours, PriceRule, ParkingLocation):
+        session.query(model).delete()
+    session.commit()
 
 
 def seed_price_rules(session):
@@ -184,10 +192,12 @@ def seed_availability(session, locations):
     print("📊 Generating simulated availability data...")
     
     availability_records = []
-    
+    now = datetime.now()
+
     for location in locations:
-        # Generate 3 snapshots per location (simulating different times of day)
+        # Generate 3 snapshots per location with distinct timestamps (now-2h, now-1h, now)
         for i in range(3):
+            snapshot_time = now - timedelta(hours=2 - i)
             # Random occupancy: 30-90% full
             occupancy_rate = random.uniform(0.3, 0.9)
             occupied = int(location.capacity * occupancy_rate)
@@ -196,7 +206,8 @@ def seed_availability(session, locations):
             availability_records.append(Availability(
                 location_id=location.id,
                 available_spots=available,
-                occupied_spots=occupied
+                occupied_spots=occupied,
+                timestamp=snapshot_time
             ))
     
     session.add_all(availability_records)
@@ -217,6 +228,9 @@ def seed_database():
     session = SessionLocal()
     
     try:
+        # Clear first so re-running the seed is safe
+        clear_existing(session)
+
         # Seed in order (respecting foreign key constraints)
         seed_price_rules(session)
         seed_working_hours(session)

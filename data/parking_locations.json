@@ -2,7 +2,7 @@
   {
     "name": "Delta City Garage",
     "type": "garage",
-    "zone": null,
+    "zone": "white_b",
     "address": "Jurija Gagarina 16, Novi Beograd",
     "capacity": 800,
     "latitude": 44.8087,
@@ -22,7 +22,7 @@
   {
     "name": "City Center Reserved Garage",
     "type": "reserved_garage",
-    "zone": null,
+    "zone": "red_1",
     "address": "Kneza Miloša 7, Savski Venac",
     "capacity": 300,
     "latitude": 44.8054,
@@ -32,7 +32,7 @@
   {
     "name": "UŠĆE Shopping Center Garage",
     "type": "garage",
-    "zone": null,
+    "zone": "white_b",
     "address": "Bulevar Mihajla Pupina 4, Novi Beograd",
     "capacity": 2500,
     "latitude": 44.8166,
@@ -72,7 +72,7 @@
   {
     "name": "Belgrade Arena Garage",
     "type": "reserved_garage",
-    "zone": null,
+    "zone": "yellow_2",
     "address": "Bulevar Arsenija Čarnojevića 58, Novi Beograd",
     "capacity": 400,
     "latitude": 44.7938,

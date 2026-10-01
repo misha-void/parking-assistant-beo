@@ -69,3 +69,6 @@ confirmed_reservations*.txt
 
 # Decision docs (personal notes only)
 docs/decisions/
+
+# Session chat logs (quality review)
+.logs/
