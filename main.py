@@ -1,15 +1,13 @@
 """
 Parking Lot Assistant - Entry Point
 
-This file is kept for IDE compatibility.
+This file is kept for IDE compatibility. The app runs via Streamlit.
 
-To run the application, use one of the following:
+    streamlit run app.py
 
-1. Streamlit UI (interactive chat):
-   streamlit run app.py
+The MCP server (records confirmed reservations) runs separately:
 
-2. FastAPI backend (API endpoints for Telegram bot, etc.):
-   uvicorn api:app --reload
+    uvicorn mcp_server.main:app --port 8001
 
 See README.md for full setup instructions.
 """
@@ -17,6 +15,6 @@ See README.md for full setup instructions.
 if __name__ == '__main__':
     print("\n🚗 Parking Lot Assistant\n")
     print("To run the application:")
-    print("  • Streamlit UI:    streamlit run app.py")
-    print("  • FastAPI backend: uvicorn api:app --reload")
+    print("  • Chat UI:     streamlit run app.py")
+    print("  • MCP server:  uvicorn mcp_server.main:app --port 8001")
     print("\nSee README.md for details.\n")

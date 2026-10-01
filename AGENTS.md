@@ -30,8 +30,15 @@ session before doing anything else.
 - **Evaluation**: Custom lightweight scripts — Recall@K, Precision@K, latency (p50/p95). RAGAS is a
   possible stretch goal later, not the default.
 - **Language support**: English only (no bilingual EN/SR requirement).
-- **Interface**: Dual interface — Streamlit chat UI for demos/testing + FastAPI backend with endpoints
-  for programmatic access (enabling future Telegram bot integration or other clients).
+- **Interface**: Streamlit chat UI only (`app.py`). The standalone FastAPI chat backend (`api.py`)
+  was removed in Stage 4 to keep the codebase concise; the MCP server remains a FastAPI service.
+- **Orchestration (Stage 4)**: the full conversation is a single LangGraph `StateGraph`
+  (`parking_assistant/graph/pipeline.py`) with an in-memory `MemorySaver` checkpointer. User prompts
+  are `interrupt()`s resumed per session; chat history is threaded into the RAG/intent path for
+  conversation memory. The `admin` node escalates (email, or console fallback) and ends the turn with
+  "submitted for approval". **Real human-in-the-loop approval** happens out of band in a Streamlit
+  admin app (`admin_app.py`, confirm/refuse buttons over `admin_agent.decide_reservation`); the MCP
+  recording happens on the admin's confirmation. `record_decision` keeps the token-based path.
 
 Any future decision that changes the above MUST be reflected back into this section by the agent.
 
@@ -118,6 +125,9 @@ these steps have happened for the corresponding piece of work.
       guardrails (PII filtering), evaluation (performance + accuracy).
 - [x] **Stage 2**: Admin approval agent (LangChain summary + email notify + approval token).
 - [x] **Stage 3**: MCP server (FastAPI, API-key protected, writes confirmed reservations to file).
-- [ ] **Stage 4**: LangGraph orchestration of the full pipeline (chat → admin approval → MCP write).
+- [x] **Stage 4**: LangGraph orchestration of the full pipeline (chat → admin approval → MCP write).
+      Single `StateGraph` in `graph/pipeline.py`; interrupt-driven; conversation memory via chat
+      history; real admin approval through `admin_app.py`; `service.py` reduced to a thin wrapper;
+      `api.py` removed (Streamlit-only: `app.py` for chat, `admin_app.py` for approvals).
 
 Update checkboxes and add brief notes as stages complete.

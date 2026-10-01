@@ -21,8 +21,9 @@ from mcp_server.client import send_confirmed_reservation
 
 
 SUMMARY_PROMPT = ChatPromptTemplate.from_template(
-    "Write a short, clear summary (3-4 lines, plain text) of this parking "
-    "reservation request for an administrator to review:\n\n"
+    "Summarize this parking reservation request for an administrator deciding whether to "
+    "approve it. Use 2-3 short plain-text lines. State only the facts given below — do not "
+    "invent details. Lead with the guest name and the time window.\n\n"
     "Name: {name} {surname}\n"
     "Car number: {car_number}\n"
     "Location: {location}\n"
@@ -64,17 +65,29 @@ async def escalate_to_admin(reservation_id: int, llm) -> None:
         session.close()
 
 
+def _apply_decision(session, reservation: Reservation, decision: str) -> str:
+    """Set status, invalidate the token, and (on confirm) hand off to the MCP server."""
+    reservation.status = (
+        ReservationStatus.CONFIRMED if decision == "confirm" else ReservationStatus.CANCELLED
+    )
+    reservation.approval_token = None  # invalidate any pending link
+    session.commit()
+
+    if reservation.status == ReservationStatus.CONFIRMED:
+        # Stage 3: hand off to MCP server for durable storage
+        period = f"{reservation.start_datetime} to {reservation.end_datetime}"
+        send_confirmed_reservation(
+            name=f"{reservation.user_name} {reservation.user_surname}",
+            car_number=reservation.car_number,
+            reservation_period=period,
+            approval_time=datetime.utcnow().isoformat(),
+        )
+
+    return f"Reservation #{reservation.id} has been {reservation.status.value}."
+
+
 def record_decision(token: str, decision: str) -> str:
-    """
-    Apply the administrator's decision for a reservation identified by token.
-
-    Args:
-        token: approval_token from the email link
-        decision: "confirm" or "refuse"
-
-    Returns:
-        Human-readable result message.
-    """
+    """Apply the admin's decision for a reservation identified by approval token (REST/email path)."""
     if decision not in ("confirm", "refuse"):
         return "Invalid decision."
 
@@ -83,23 +96,52 @@ def record_decision(token: str, decision: str) -> str:
         reservation = session.query(Reservation).filter(Reservation.approval_token == token).first()
         if reservation is None:
             return "Reservation not found or token already used."
+        return _apply_decision(session, reservation, decision)
+    finally:
+        session.close()
 
-        reservation.status = (
-            ReservationStatus.CONFIRMED if decision == "confirm" else ReservationStatus.CANCELLED
-        )
-        reservation.approval_token = None  # invalidate link after use
-        session.commit()
 
-        if reservation.status == ReservationStatus.CONFIRMED:
-            # Stage 3: hand off to MCP server for durable storage
-            period = f"{reservation.start_datetime} to {reservation.end_datetime}"
-            send_confirmed_reservation(
-                name=f"{reservation.user_name} {reservation.user_surname}",
-                car_number=reservation.car_number,
-                reservation_period=period,
-                approval_time=datetime.utcnow().isoformat(),
-            )
+def decide_reservation(reservation_id: int, decision: str) -> str:
+    """Apply the admin's decision by reservation id (used by the admin app)."""
+    if decision not in ("confirm", "refuse"):
+        return "Invalid decision."
 
-        return f"Reservation #{reservation.id} has been {reservation.status.value}."
+    session = SessionLocal()
+    try:
+        reservation = session.query(Reservation).filter(Reservation.id == reservation_id).first()
+        if reservation is None:
+            return "Reservation not found."
+        if reservation.status != ReservationStatus.PENDING_APPROVAL:
+            return f"Reservation #{reservation.id} is already {reservation.status.value}."
+        return _apply_decision(session, reservation, decision)
+    finally:
+        session.close()
+
+
+def get_reservation_status(reservation_id: int):
+    """Return the current status value (e.g. 'confirmed') for a reservation, or None."""
+    session = SessionLocal()
+    try:
+        r = session.query(Reservation).filter(Reservation.id == reservation_id).first()
+        return r.status.value if r else None
+    finally:
+        session.close()
+
+
+def list_pending_reservations() -> list:
+    """Return pending reservations as plain dicts (slot overview) for the admin app."""
+    session = SessionLocal()
+    try:
+        rows = (session.query(Reservation)
+                .filter(Reservation.status == ReservationStatus.PENDING_APPROVAL)
+                .order_by(Reservation.id).all())
+        return [{
+            "id": r.id,
+            "name": f"{r.user_name} {r.user_surname}",
+            "car_number": r.car_number,
+            "location": r.location.name if r.location else "-",
+            "start": str(r.start_datetime),
+            "end": str(r.end_datetime),
+        } for r in rows]
     finally:
         session.close()

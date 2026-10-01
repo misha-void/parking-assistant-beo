@@ -62,20 +62,15 @@ For #4, the bot will guide you through:
 - Location selection
 - Start/end dates
 
-### Option 2: FastAPI Backend
+### Record confirmed reservations (optional)
+
+Run the MCP server in a separate terminal so confirmed bookings are written to file:
 
 ```bash
-uvicorn api:app --reload
+uvicorn mcp_server.main:app --port 8001
 ```
 
-Access API docs: http://localhost:8000/docs
-
-Test with curl:
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What are zone A rules?"}'
-```
+The chat works without it; the recording step just logs if the server is unreachable.
 
 ## Testing
 

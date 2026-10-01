@@ -6,6 +6,8 @@ Run with: streamlit run app.py
 import streamlit as st
 import asyncio
 from parking_assistant.service import process_chat_message
+from parking_assistant.session_registry import get_reservation
+from parking_assistant.admin.admin_agent import get_reservation_status
 
 
 # Page configuration
@@ -24,6 +26,26 @@ if "messages" not in st.session_state:
 if "session_id" not in st.session_state:
     import uuid
     st.session_state.session_id = str(uuid.uuid4())
+
+
+# Proactively notify the user when the admin confirms/refuses their reservation.
+# Polls the shared DB every few seconds and posts a bot message when the status changes.
+@st.fragment(run_every=3)
+def _watch_reservation_status():
+    rid = get_reservation(st.session_state.session_id)
+    if not rid:
+        return
+    status = get_reservation_status(rid)
+    if status in ("confirmed", "cancelled") and status != st.session_state.get("notified_status"):
+        st.session_state.notified_status = status
+        verb = "confirmed ✅" if status == "confirmed" else "refused ❌"
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": f"🔔 Update: your reservation #{rid} was {verb} by the admin.",
+        })
+        st.rerun(scope="app")
+
+_watch_reservation_status()
 
 # Display chat history
 for message in st.session_state.messages:

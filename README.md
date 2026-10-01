@@ -1,165 +1,134 @@
-"""
-Parking Assistant - Belgrade
-AI chatbot for parking information and reservations in Belgrade, Serbia.
+# Parking Assistant — Belgrade
 
-## Quick Start
+AI chatbot for parking information and reservations in Belgrade, Serbia. Answers questions over a
+RAG knowledge base, runs an interactive reservation flow, escalates to an admin for approval, and
+records confirmed bookings via an MCP server — all orchestrated as a single **LangGraph** pipeline.
 
-### 1. Install Dependencies
+## Architecture
+
+```
+          Streamlit UI (app.py)
+                  │  process_chat_message(session_id, text)
+                  ▼
+        LangGraph pipeline (parking_assistant/graph/pipeline.py)
+                  │
+   route_intent ──┼── (info question) ──► RAG agent ──► answer ──► END
+        │ (book_spot)
+        ▼
+     collect ◄─┐  one slot per turn via interrupt()  (name, surname,
+        │      └─ loop until complete                  car, location, dates)
+        ▼
+     confirm ── interrupt() "yes/no" ──► (no) END
+        │ (yes)
+        ▼
+      save  ── writes Reservation (PENDING_APPROVAL) to SQLite
+        │
+        ▼
+      admin ── escalate_to_admin() notifies admin (email, or console fallback) ──► END
+               "submitted for approval"
+
+   Out of band — admin_app.py (Streamlit):
+      admin reviews pending requests ──► Confirm/Refuse ──► status=CONFIRMED/CANCELLED
+                                                            ──► (on confirm) MCP server records it
+```
+
+The whole conversation is **one resumable graph run per session**. Each question to the user is a
+LangGraph `interrupt()`; the next message resumes the run from a checkpoint (`MemorySaver`). State
+lives in the checkpointer keyed by `session_id`, and recent chat history is threaded into the
+RAG/intent path for conversation memory, so the UI holds no conversation logic.
+
+### Components / agent & server logic
+
+- **RAG agent** (`rag/`): intent classification (5 intents) → retrieval (Milvus for static docs,
+  SQLite for dynamic data) → grounded answer. PII guardrail (Presidio) filters retrieved context.
+- **Reservation slot-filling** (`graph/slot_collector.py`): Pydantic `ReservationSlots`, car-plate
+  validation, LLM-based date parsing and location matching. Driven node-by-node by the graph.
+- **Admin approval** (`admin/`): `escalate_to_admin` generates an LLM summary and notifies the admin
+  (SMTP email, or prints to console if SMTP is unset). A human admin approves in **`admin_app.py`**
+  (a minimal Streamlit UI listing pending requests with slot details + Confirm/Refuse buttons), which
+  calls `decide_reservation` to set the status and, on confirm, record to the MCP server.
+  `record_decision` keeps the token-based confirm/refuse path (unit-tested).
+- **MCP server** (`mcp_server/`): API-key-protected FastAPI service that appends confirmed
+  reservations to a text file. The pipeline calls it via `mcp_server/client.py` (non-blocking if
+  unreachable, so approval is never blocked).
+
+## Setup
+
 ```bash
+# 1. Python 3.12 virtual env (the ecosystem is not ready for 3.13+)
+python3.12 -m venv .venv && source .venv/bin/activate
+
+# 2. Dependencies
 pip install -r requirements.txt
+python -m spacy download en_core_web_sm        # for the Presidio guardrail
 
-# Download spaCy model for guardrails
-python -m spacy download en_core_web_sm
+# 3. Environment
+cp .env.example .env                            # add OPENAI_API_KEY; MCP/SMTP vars optional
+
+# 4. Initialize data
+python data_ingestions/seed_dynamic_db.py       # seed SQLite
+python data_ingestions/ingest_static_to_milvus.py  # embed static docs into Milvus
 ```
 
-### 2. Setup Environment
-```bash
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-```
+Relevant env vars: `OPENAI_API_KEY` (required); `MCP_SERVER_URL`, `MCP_API_KEY` (MCP recording);
+`SMTP_HOST/PORT/USER/PASSWORD`, `ADMIN_EMAIL`, `APP_BASE_URL` (email notifications — omit for console).
 
-### 3. Initialize Data
-```bash
-# Seed SQL database
-python data_ingestions/seed_dynamic_db.py
+## Run
 
-# Ingest static docs to vector DB
-python data_ingestions/ingest_static_to_milvus.py
-```
-
-### 4. Run Application
 ```bash
-# Streamlit UI (recommended for testing)
+# Start the MCP server (separate terminal) so confirmed bookings are recorded
+uvicorn mcp_server.main:app --port 8001
+
+# Start the chat UI
 streamlit run app.py
 
-# Or FastAPI backend
-uvicorn api:app --reload
+# Start the admin approval UI (separate terminal) to confirm/refuse requests
+streamlit run admin_app.py --server.port 8502
 ```
 
-## Features
-
-✅ **RAG System**
-- Intent classification (5 intents)
-- Hybrid retrieval (Milvus + SQLite)
-- Context-aware responses
-
-✅ **Reservation System**
-- Interactive slot-filling conversation
-- Collects: name, surname, car number, location, dates
-- Human-in-loop approval simulation
-
-✅ **Guardrails**
-- PII detection using Microsoft Presidio
-- Filters sensitive data from retrieved context
-- Validates user inputs
-
-✅ **Evaluation**
-- Performance metrics (latency p50/p95/p99)
-- Accuracy metrics (intent, keyword recall, source routing)
-- Test dataset with 8 queries
+Without the MCP server the chat still works; the recording step just logs that it was unreachable.
+When a user submits a reservation it becomes **pending**; approve it in the admin app to confirm and
+record it.
 
 ## Testing
 
 ```bash
-# Run all tests
-pytest tests/
-
-# Run specific test file
-pytest tests/test_guardrails.py -v
-
-# Run evaluation
-python scripts/run_evaluation.py
+pytest tests/                        # unit tests (slots, DB, guardrails, admin, MCP)
+python scripts/run_evaluation.py     # RAG eval: Recall@K / Precision@K / latency
 ```
 
-## Project Structure
+## Project structure
 
 ```
+app.py                     # Streamlit chat UI (user-facing)
+admin_app.py               # Streamlit admin UI (confirm/refuse pending reservations)
 parking_assistant/
-├── rag/                    # RAG components
-│   ├── intent_classifier.py
-│   ├── retriever.py
-│   └── chain.py
-├── graph/                  # Reservation slot collector
-│   └── slot_collector.py
-├── guardrails/             # PII filtering
-│   └── pii_filter.py
-├── evaluation/             # Metrics & evaluation
-│   └── metrics.py
-├── db/                     # Database models
-│   ├── models.py
-│   └── database.py
-└── service.py              # Main service layer
-
-data/
-├── static/                 # Markdown docs (vector DB)
-└── parking_locations.json  # Parking locations (SQL)
-
-data_ingestions/            # Setup scripts
-tests/                      # Pytest test suite
-scripts/                    # Evaluation runner
+├── graph/
+│   ├── pipeline.py        # LangGraph orchestration (Stage 4) — the pipeline above
+│   └── slot_collector.py  # reservation slots + validation/parsing helpers
+├── rag/                   # intent classifier, retriever, RAG chain
+├── guardrails/            # Presidio PII filtering
+├── admin/                 # admin approval agent + notifier
+├── evaluation/            # RAG metrics
+├── db/                    # SQLAlchemy models + session
+├── llm_factory.py         # pluggable chat/embedding model factory
+└── service.py             # thin wrapper: process_chat_message -> graph run_turn
+mcp_server/                # FastAPI MCP service + client
+data/                      # static docs (Milvus) + parking_locations.json (SQLite)
+data_ingestions/           # seed / ingest scripts
+tests/ · scripts/          # pytest suite · eval runner
 ```
 
-## Conversation Examples
+## Stage status
 
-### Information Query
-```
-User: What are the parking rules in zone A?
-Bot: Zone A (Purple Zone) has a maximum parking time of 30 minutes with no extensions available...
-```
-
-### Availability Search
-```
-User: Show me available garages
-Bot: Here are the available garages:
-     • UŠĆE Shopping Center: 1,800/2,500 spots available
-     • Delta City Garage: 620/800 spots available
-     ...
-```
-
-### Reservation Flow
-```
-User: I want to book a spot
-Bot: Great! I'll help you book a parking spot. What's your first name?
-User: John
-Bot: What's your surname?
-User: Doe
-Bot: What's your car license plate number?
-User: BG123AB
-Bot: Here are some available parking locations...
-...
-Bot: ✅ Reservation Submitted! Your reservation request (ID: #42) has been submitted for approval.
-```
-
-## Stage 1 Completion Status
-
-✅ Task 1: Environment & skeleton  
-✅ Task 2: Vector DB + SQL data layer  
-✅ Task 3: RAG chain + reservation collector  
-✅ Task 4: Guardrails (PII filtering)  
-✅ Task 5: Evaluation metrics
-
-**Next**: Stage 2 (LangGraph state machine, advanced reservation flow)
+- [x] Stage 1 — RAG + chatbot, vector DB, reservation collection, guardrails, evaluation
+- [x] Stage 2 — Admin approval agent (LLM summary + email/console notify + approval token)
+- [x] Stage 3 — MCP server (writes confirmed reservations to file)
+- [x] Stage 4 — LangGraph orchestration of the full pipeline (chat → approval → MCP record)
 
 ## Dependencies
 
-Core:
-- Python 3.12
-- LangChain 0.3+
-- LangGraph 0.2+
-- OpenAI API
+Python 3.12 · LangChain 0.3 / LangGraph 0.2 · OpenAI · Milvus Lite · SQLite + SQLAlchemy ·
+Presidio · Streamlit · FastAPI (MCP server only).
 
-Data:
-- Milvus Lite (vector DB)
-- SQLite + SQLAlchemy
-
-Guardrails:
-- Microsoft Presidio
-
-UI:
-- Streamlit (chat interface)
-- FastAPI (backend API)
-
-## License
-
-Learning project - MIT License
-"""
+Learning project — MIT License.

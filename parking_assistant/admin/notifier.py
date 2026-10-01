@@ -19,13 +19,11 @@ SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
 
 
 def _build_email_body(summary: str, token: str) -> str:
-    """Build plain-text email body with confirm/refuse links."""
-    confirm_url = f"{APP_BASE_URL}/admin/respond?token={token}&decision=confirm"
-    refuse_url = f"{APP_BASE_URL}/admin/respond?token={token}&decision=refuse"
+    """Build plain-text notification body. Approval happens in the admin app."""
     return (
         f"New parking reservation request:\n\n{summary}\n\n"
-        f"Confirm: {confirm_url}\n"
-        f"Refuse:  {refuse_url}\n"
+        f"Approval token: {token}\n"
+        f"Confirm or refuse it in the admin app:  streamlit run admin_app.py\n"
     )
 
 
