@@ -9,6 +9,7 @@ pluggable tool (currently email, see notifier.py).
 """
 
 import secrets
+from datetime import datetime
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -16,6 +17,7 @@ from langchain_core.output_parsers import StrOutputParser
 from parking_assistant.db.database import SessionLocal
 from parking_assistant.db.models import Reservation, ReservationStatus
 from parking_assistant.admin.notifier import send_admin_notification
+from mcp_server.client import send_confirmed_reservation
 
 
 SUMMARY_PROMPT = ChatPromptTemplate.from_template(
@@ -87,6 +89,16 @@ def record_decision(token: str, decision: str) -> str:
         )
         reservation.approval_token = None  # invalidate link after use
         session.commit()
+
+        if reservation.status == ReservationStatus.CONFIRMED:
+            # Stage 3: hand off to MCP server for durable storage
+            period = f"{reservation.start_datetime} to {reservation.end_datetime}"
+            send_confirmed_reservation(
+                name=f"{reservation.user_name} {reservation.user_surname}",
+                car_number=reservation.car_number,
+                reservation_period=period,
+                approval_time=datetime.utcnow().isoformat(),
+            )
 
         return f"Reservation #{reservation.id} has been {reservation.status.value}."
     finally:

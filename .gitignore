@@ -64,5 +64,8 @@ htmlcov/
 /data/raw/  # If we add raw data files
 /data/processed/
 
+# MCP server output (Stage 3)
+confirmed_reservations*.txt
+
 # Decision docs (personal notes only)
 docs/decisions/

@@ -23,6 +23,9 @@ langchain-milvus==0.1.6
 # Database ORM
 sqlalchemy==2.0.36
 
+# HTTP client (MCP server communication)
+httpx==0.28.1
+
 # Testing
 pytest==8.4.0
 pytest-asyncio==0.25.2
