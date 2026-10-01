@@ -10,8 +10,13 @@ session before doing anything else.
 ## 0. Project Snapshot (confirmed decisions so far)
 
 - **Goal**: Build an intelligent chatbot for parking lots in Serbia — info Q&A, reservation flow,
-  human-in-the-loop confirmation. Built in 4 stages (this file currently covers Stage 1 process; update
-  as later stages start).
+    human-in-the-loop confirmation. Built in 4 stages.
+  - **Stage 2 (done)**: Admin approval agent (`parking_assistant/admin/`) — LangChain-generated
+    summary, email notification (console fallback if SMTP unset) with confirm/refuse links, decision
+    recorded via approval token.
+  - **Stage 3 (done)**: MCP server (`mcp_server/`) — FastAPI service, API-key protected, writes
+    confirmed reservations to a text file (`Name | Car Number | Period | Approval Time`); admin agent
+    notifies it via `mcp_server/client.py` (non-blocking if unreachable).
 - **Language**: Python 3.12 (rebuild `.venv`, currently on 3.14 which is too new for the ecosystem).
 - **Orchestration**: LangChain + LangGraph.
 - **Vector DB**: Milvus Lite (embedded, no infra), behind an interface/adapter so it can be swapped
@@ -58,8 +63,8 @@ follow this exact 5-step loop, in order, without skipping steps or collapsing th
   - what was decided, why, alternatives considered/rejected.
   - who implements what (AI vs. human) for this step.
   - any open questions / follow-ups.
-- File location convention: `docs/decisions/stage-<N>-<short-task-slug>.md`
-  (e.g. `docs/decisions/stage-1-vector-db-setup.md`).
+- File location convention: outside this repo (human keeps decision specs separately). Do not
+  create `docs/decisions/*.md` files going forward.
 - Keep specs concise and skimmable — bullet points over prose, headers per section.
 
 ### Step 4 — Skill-Building Support
@@ -109,10 +114,10 @@ these steps have happened for the corresponding piece of work.
 
 ## 4. Stage Tracker
 
-- [ ] **Stage 1**: RAG system + chatbot, vector DB, interactive info/reservation collection,
-      guardrails (PII filtering), evaluation (performance + accuracy). ← *currently in progress*
-- [ ] **Stage 2**: (to be defined when reached)
-- [ ] **Stage 3**: (to be defined when reached)
-- [ ] **Stage 4**: Human-in-the-loop confirmation flow.
+- [x] **Stage 1**: RAG system + chatbot, vector DB, interactive info/reservation collection,
+      guardrails (PII filtering), evaluation (performance + accuracy).
+- [x] **Stage 2**: Admin approval agent (LangChain summary + email notify + approval token).
+- [x] **Stage 3**: MCP server (FastAPI, API-key protected, writes confirmed reservations to file).
+- [ ] **Stage 4**: LangGraph orchestration of the full pipeline (chat → admin approval → MCP write).
 
 Update checkboxes and add brief notes as stages complete.
