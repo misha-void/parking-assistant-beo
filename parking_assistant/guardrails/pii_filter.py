@@ -31,11 +31,21 @@ class PIIGuardrail:
     # Entities to actually anonymize (subset of detected)
     ANONYMIZE_ENTITIES = [
         "PERSON",
-        "EMAIL_ADDRESS", 
+        "EMAIL_ADDRESS",
         "PHONE_NUMBER",
         "CREDIT_CARD",
         "IBAN_CODE",
         "NRP"
+    ]
+
+    # Entities to filter from RETRIEVED CONTEXT only — genuine secrets. Deliberately
+    # excludes PHONE_NUMBER/PERSON/LOCATION, which false-positive on parking data
+    # (e.g. spot counts like "1800/2500" were being redacted as phone numbers) and
+    # on Serbian street/location names.
+    CONTEXT_ENTITIES = [
+        "EMAIL_ADDRESS",
+        "CREDIT_CARD",
+        "IBAN_CODE",
     ]
     
     def __init__(self, language: str = "en"):
@@ -147,20 +157,16 @@ class PIIGuardrail:
         Returns:
             Filtered context
         """
-        # Detect all PII
-        pii_entities = self.detect_pii(context)
-        
-        # Filter high-confidence detections
-        high_conf_entities = [
-            e for e in pii_entities 
-            if e["score"] >= threshold and e["entity_type"] in self.ANONYMIZE_ENTITIES
-        ]
-        
+        # Detect only genuine secrets (not numbers/names that collide with parking data)
+        pii_entities = self.detect_pii(context, self.CONTEXT_ENTITIES)
+
+        high_conf_entities = [e for e in pii_entities if e["score"] >= threshold]
+
         if not high_conf_entities:
             return context
-        
-        # Anonymize
-        filtered, _ = self.anonymize_pii(context)
+
+        # Anonymize just those entity types
+        filtered, _ = self.anonymize_pii(context, self.CONTEXT_ENTITIES)
         return filtered
     
     def validate_user_input(self, user_input: str, allow_entities: List[str] = None) -> Tuple[bool, List[Dict]]:

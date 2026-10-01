@@ -133,9 +133,15 @@ async def parse_datetime_with_llm(date_str: str, llm) -> Optional[datetime]:
 Parse this date/time expression into ISO 8601 format (YYYY-MM-DDTHH:MM:SS).
 Today is {today}.
 
+Rules:
+- If the date is ambiguous, choose the nearest FUTURE date (never a past one).
+- If the year is omitted, use the current year (or next year if that date has already passed).
+- Use 24-hour time; "9am" -> 09:00:00, "5pm" -> 17:00:00. If no time is given, use 09:00:00.
+- Resolve relative terms ("tomorrow", "next Monday") from today's date.
+
 User input: {date_str}
 
-Respond with ONLY the ISO datetime, nothing else. If unparseable, respond with "INVALID".
+Respond with ONLY the ISO 8601 datetime, nothing else. If it is not a date/time, respond with "INVALID".
 """)
     
     chain = prompt | llm | StrOutputParser()
@@ -183,8 +189,10 @@ Match the user's parking preference to one of these locations:
 
 User preference: {preference}
 
-Respond with ONLY the number (0, 1, 2, etc.) of the best matching location.
-If no good match, respond with "NONE".
+Pick the single best location ONLY if it genuinely matches the user's description (name, address, or area).
+If nothing clearly matches or several fit equally well, do not guess.
+
+Respond with ONLY the number (0, 1, 2, etc.) of the matching location, or "NONE" if no genuine match.
 """)
     
     chain = prompt | llm | StrOutputParser()
@@ -205,5 +213,156 @@ If no good match, respond with "NONE".
             return available_locations[idx]['id']
     except ValueError:
         pass
-    
+
     return None
+
+
+# Human-readable labels for the slot the collector is currently asking about
+SLOT_LABELS = {
+    "name": "first name",
+    "surname": "surname",
+    "car_number": "car license plate",
+    "location": "parking location choice",
+    "start_date": "reservation start date/time",
+    "end_date": "reservation end date/time",
+}
+
+
+async def infer_location_from_conversation(history: list, current: str, locations: list, llm) -> Optional[int]:
+    """
+    From the recent conversation (not just the latest message), infer which bookable
+    location the user wants. `locations` is [{id, name, address}]. Returns the id or None.
+    """
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
+
+    loc_text = "\n".join(
+        f"{i}. {l['name']} - {l.get('address', '')} - "
+        f"{str(l['price']) + ' RSD/hour' if l.get('price') else 'price varies'}"
+        for i, l in enumerate(locations)
+    )
+    convo_lines = [f"{m.get('role', 'user').capitalize()}: {m.get('content', '')}" for m in (history or [])[-6:]]
+    convo_lines.append(f"User (now): {current}")
+    conversation = "\n".join(convo_lines)
+
+    prompt = ChatPromptTemplate.from_template("""
+Bookable parking locations:
+{locations}
+
+Conversation:
+{conversation}
+
+Which ONE of the bookable locations does the user want to book? Consider the whole
+conversation, not just the last line. If they ask for the "cheapest"/"most expensive",
+choose by the listed RSD/hour price (ignore "price varies" garages). Respond with ONLY
+the number, or "NONE" if it is not clear which location they want.
+""")
+    result = (await (prompt | llm | StrOutputParser()).ainvoke(
+        {"locations": loc_text, "conversation": conversation})).strip()
+
+    if result.upper().startswith("NONE"):
+        return None
+    try:
+        idx = int(result)
+        if 0 <= idx < len(locations):
+            return locations[idx]["id"]
+    except ValueError:
+        pass
+    return None
+
+
+async def interpret_slot_reply(slot: str, reply: str, history: list, llm,
+                               locations: list = None, start_iso: str = None,
+                               today: str = None) -> dict:
+    """
+    Interpret one reservation turn in context. Returns {"kind", "value"}:
+      - kind "answer": the user provided the asked slot; "value" is normalized:
+          name/surname -> just the name; car_number -> plate (upper, no spaces);
+          location -> the EXACT name of the chosen location from `locations`
+            (resolving references/affirmations like "the purple one" / "yes" from the
+            conversation), or "" if none matches;
+          start_date/end_date -> an ISO 8601 datetime (for end_date, resolve "same day"
+            and relative terms against the start date).
+      - kind "question": the user asked something or didn't answer; "value" is "".
+    Classify as "question" only when the user is clearly not answering the asked slot.
+    """
+    import json
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
+
+    loc_text = "\n".join(
+        f"- {l['name']} ({str(l['price']) + ' RSD/hour' if l.get('price') else 'price varies'})"
+        for l in (locations or [])
+    ) or "(none)"
+    convo = "\n".join(f"{m.get('role','user').capitalize()}: {m.get('content','')}"
+                      for m in (history or [])[-6:]) or "(none)"
+
+    prompt = ChatPromptTemplate.from_template("""
+You are helping fill a parking reservation. The user was just asked for their: {slot_label}.
+User reply: "{reply}"
+
+Conversation so far:
+{conversation}
+
+Bookable locations (for location slot):
+{locations}
+
+Today is {today}. Chosen start date/time (for end-date slot): {start_iso}
+
+Decide if the reply ANSWERS the "{slot_label}" or is a QUESTION / not an answer.
+Return STRICT JSON: {{"kind": "answer"|"question", "value": "<normalized value or empty>"}}
+
+Normalization when kind is "answer":
+- first name / surname: value = just the name (e.g. "Yes, my name is Michke" -> "Michke").
+- car license plate: value = the plate, uppercase, no spaces.
+- parking location choice: value = the EXACT location name chosen. Resolve references and
+  affirmations ("the purple one", "that one", "yes") using the conversation, and
+  "cheapest"/"most expensive" by the listed RSD/hour price (ignore "price varies"). "" if unclear.
+- start/end date-time: value = ISO 8601 (YYYY-MM-DDTHH:MM:SS); use 24h; assume future; for the
+  end date, "same day"/relative phrases are relative to the start date above.
+Only use "question" when the reply is clearly a question or refuses/deflects the asked slot.
+Respond with ONLY the JSON object.
+""")
+    raw = (await (prompt | llm | StrOutputParser()).ainvoke({
+        "slot_label": SLOT_LABELS.get(slot, slot),
+        "reply": reply,
+        "conversation": convo,
+        "locations": loc_text,
+        "today": today or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "start_iso": start_iso or "(not set yet)",
+    })).strip()
+
+    # Tolerant parse (strip code fences / stray text)
+    if "{" in raw:
+        raw = raw[raw.index("{"): raw.rindex("}") + 1]
+    try:
+        data = json.loads(raw)
+        kind = "question" if str(data.get("kind", "")).lower().startswith("q") else "answer"
+        return {"kind": kind, "value": str(data.get("value") or "").strip()}
+    except (ValueError, KeyError):
+        return {"kind": "answer", "value": reply.strip()}  # safe fallback: treat as answer
+
+
+async def is_question_not_answer(reply: str, slot: str, llm) -> bool:
+    """
+    During slot collection, decide whether the user's reply is answering the asked
+    slot or instead asking a question / making a different request.
+
+    Returns True if the reply is a question/other request (should be answered, not stored).
+    """
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
+
+    prompt = ChatPromptTemplate.from_template("""
+A user is booking a parking spot and was just asked to provide their {slot_label}.
+
+Their reply: "{reply}"
+
+Is the reply actually providing that {slot_label}, or is it a question / a different request
+(e.g. asking about addresses, prices, which option to pick)?
+
+Respond with ONLY one word: ANSWER or QUESTION.
+""")
+    chain = prompt | llm | StrOutputParser()
+    result = await chain.ainvoke({"slot_label": SLOT_LABELS.get(slot, slot), "reply": reply})
+    return "QUESTION" in result.strip().upper()
