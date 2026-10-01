@@ -8,9 +8,11 @@ Endpoints:
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from parking_assistant.service import process_chat_message
+from parking_assistant.admin.admin_agent import record_decision
 
 app = FastAPI(
     title="Parking Assistant API",
@@ -76,3 +78,13 @@ async def chat_endpoint(request: ChatRequest):
 # Auto-generated interactive docs available at:
 # - Swagger UI: http://localhost:8000/docs
 # - ReDoc: http://localhost:8000/redoc
+
+
+@app.get("/admin/respond", response_class=HTMLResponse)
+async def admin_respond(token: str, decision: str):
+    """
+    Clickable link endpoint for the administrator to confirm/refuse a reservation.
+    Called from the email notification (second agent flow).
+    """
+    message = record_decision(token, decision)
+    return f"<html><body><h3>{message}</h3></body></html>"

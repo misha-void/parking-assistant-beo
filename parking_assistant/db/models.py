@@ -150,6 +150,7 @@ class Reservation(Base):
 
     # Workflow
     status = Column(Enum(ReservationStatus), nullable=False, default=ReservationStatus.PENDING_APPROVAL, index=True)
+    approval_token = Column(String(64), unique=True, nullable=True, index=True)  # used in admin email links
 
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())

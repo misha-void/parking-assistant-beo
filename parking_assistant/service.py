@@ -15,6 +15,7 @@ from parking_assistant.graph.slot_collector import (
 )
 from parking_assistant.db.database import SessionLocal
 from parking_assistant.db.models import Reservation, ReservationStatus, ParkingLocation
+from parking_assistant.admin.admin_agent import escalate_to_admin
 
 
 # In-memory session state storage
@@ -108,9 +109,12 @@ async def handle_reservation_mode(
         if message_lower in ["yes", "confirm", "correct", "ok"]:
             # Save reservation to database
             reservation_id = await save_reservation(state.reservation_slots)
-            
+
+            # Escalate to human administrator (second agent)
+            await escalate_to_admin(reservation_id, llm)
+
             state.reset()  # Reset state after saving
-            
+
             return (
                 f"✅ **Reservation Submitted!**\n\n"
                 f"Your reservation request (ID: #{reservation_id}) has been submitted for approval.\n"
