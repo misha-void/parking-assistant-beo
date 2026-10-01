@@ -7,6 +7,29 @@ from parking_assistant.db.models import ParkingLocation, PriceRule, WorkingHours
 from sqlalchemy import func, and_
 
 
+def price_label(price) -> str:
+    """Human label for an hourly price (None = private garage without a published rate)."""
+    return f"{price} RSD/hour" if price else "price varies (private garage)"
+
+
+def get_bookable_locations() -> List[Dict[str, Any]]:
+    """All bookable locations with their hourly price (SQL only; None price for garages)."""
+    session = SessionLocal()
+    try:
+        rate_by_zone = {pr.zone: pr.hourly_rate_rsd for pr in session.query(PriceRule).all()}
+        return [
+            {
+                "id": l.id,
+                "name": l.name,
+                "address": l.address,
+                "price": rate_by_zone.get(l.zone) if l.zone else None,
+            }
+            for l in session.query(ParkingLocation).all()
+        ]
+    finally:
+        session.close()
+
+
 class Retriever:
     """Handles retrieval from both vector DB and SQL database."""
     
@@ -117,7 +140,9 @@ class Retriever:
                 ParkingLocation.address,
                 ParkingLocation.capacity,
                 Availability.available_spots,
-                Availability.occupied_spots
+                Availability.occupied_spots,
+                ParkingLocation.id,
+                Availability.timestamp
             ).join(
                 Availability, ParkingLocation.id == Availability.location_id
             ).join(
@@ -151,8 +176,19 @@ class Retriever:
                 if zone in zone_map:
                     query = query.filter(ParkingLocation.zone == zone_map[zone])
             
-            results = query.all()
-            
+            rows = query.order_by(Availability.timestamp.desc()).all()
+
+            # Keep exactly one row per location (latest; robust to timestamp ties)
+            seen_ids = set()
+            results = []
+            for row in rows:
+                if row[7] in seen_ids:
+                    continue
+                seen_ids.add(row[7])
+                results.append(row)
+
+            rate_by_zone = {pr.zone: pr.hourly_rate_rsd for pr in session.query(PriceRule).all()}
+
             # Format results
             if not results:
                 return {
@@ -162,23 +198,26 @@ class Retriever:
                 }
             
             formatted = []
-            for name, ptype, pzone, address, capacity, available, occupied in results:
+            for name, ptype, pzone, address, capacity, available, occupied, _loc_id, _ts in results:
                 zone_str = f" ({pzone.value})" if pzone else ""
                 formatted.append(
                     f"• {name} [{ptype.value}]{zone_str}\n"
                     f"  Address: {address}\n"
+                    f"  Price: {price_label(rate_by_zone.get(pzone))}\n"
                     f"  Available: {available}/{capacity} spots\n"
                 )
-            
+
             return {
                 "source": "sql",
                 "context": "\n".join(formatted),
                 "locations": [
                     {
+                        "id": r[7],
                         "name": r[0],
                         "type": r[1].value,
                         "zone": r[2].value if r[2] else None,
                         "address": r[3],
+                        "price": rate_by_zone.get(r[2]),
                         "available": r[5]
                     }
                     for r in results
