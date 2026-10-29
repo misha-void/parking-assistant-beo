@@ -1,6 +1,6 @@
 """RAG chain orchestration - ties together intent classification, retrieval, and response generation."""
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 

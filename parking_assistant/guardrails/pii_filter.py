@@ -1,7 +1,7 @@
 """Guardrails for PII detection and filtering using Microsoft Presidio."""
 
 from typing import List, Dict, Tuple
-from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
+from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig

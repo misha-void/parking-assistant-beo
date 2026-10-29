@@ -1,8 +1,8 @@
 """Slot-filling conversation logic for parking reservations."""
 
-from typing import Dict, Optional, List
+from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel
 import re
 
 
@@ -11,7 +11,6 @@ class ReservationSlots(BaseModel):
     name: Optional[str] = None
     surname: Optional[str] = None
     car_number: Optional[str] = None
-    location_preference: Optional[str] = None  # User's description
     location_id: Optional[int] = None  # Matched location ID
     start_date: Optional[str] = None  # ISO format or natural language
     end_date: Optional[str] = None
@@ -64,26 +63,6 @@ class SlotCollector:
         # (letters only) is correctly rejected while "BG123AB" / "ABC-123" pass.
         self.car_number_pattern = re.compile(r'^(?=.*[0-9])[A-Z0-9\-]{3,10}$', re.IGNORECASE)
     
-    def extract_slots_from_message(self, message: str, current_slots: ReservationSlots) -> ReservationSlots:
-        """
-        Extract slot values from user message.
-        Simple keyword/pattern matching for now.
-        """
-        message_lower = message.lower()
-        
-        # Extract car number (if looks like plate)
-        if not current_slots.car_number:
-            # Look for patterns like BG123AB, 123-ABC, etc.
-            tokens = message.split()
-            for token in tokens:
-                if self.car_number_pattern.match(token):
-                    current_slots.car_number = token.upper()
-                    break
-        
-        # For names, if we just asked for name and got a short response, assume it's the name
-        # (This is simplified - in production would use NER or LLM extraction)
-        
-        return current_slots
     
     def validate_car_number(self, car_number: str) -> bool:
         """Validate car number format."""
@@ -159,62 +138,6 @@ Respond with ONLY the ISO 8601 datetime, nothing else. If it is not a date/time,
         return datetime.fromisoformat(result.replace('Z', '+00:00'))
     except ValueError:
         return None
-
-
-async def match_location_with_llm(preference: str, available_locations: List[Dict], llm) -> Optional[int]:
-    """
-    Match user's location preference to available locations using LLM.
-    
-    Args:
-        preference: User's description (e.g., "near city center", "UŠĆE mall")
-        available_locations: List of dicts with name, address, description
-        llm: Language model instance
-    
-    Returns:
-        Location ID (index in list) or None if no good match
-    """
-    from langchain_core.prompts import ChatPromptTemplate
-    from langchain_core.output_parsers import StrOutputParser
-    
-    # Format locations for prompt
-    locations_text = "\n".join([
-        f"{i}. {loc['name']} - {loc['address']}"
-        for i, loc in enumerate(available_locations)
-    ])
-    
-    prompt = ChatPromptTemplate.from_template("""
-Match the user's parking preference to one of these locations:
-
-{locations}
-
-User preference: {preference}
-
-Pick the single best location ONLY if it genuinely matches the user's description (name, address, or area).
-If nothing clearly matches or several fit equally well, do not guess.
-
-Respond with ONLY the number (0, 1, 2, etc.) of the matching location, or "NONE" if no genuine match.
-""")
-    
-    chain = prompt | llm | StrOutputParser()
-    
-    result = await chain.ainvoke({
-        "locations": locations_text,
-        "preference": preference
-    })
-    
-    result = result.strip()
-    
-    if result == "NONE":
-        return None
-    
-    try:
-        idx = int(result)
-        if 0 <= idx < len(available_locations):
-            return available_locations[idx]['id']
-    except ValueError:
-        pass
-
-    return None
 
 
 # Human-readable labels for the slot the collector is currently asking about
@@ -343,26 +266,3 @@ Respond with ONLY the JSON object.
         return {"kind": "answer", "value": reply.strip()}  # safe fallback: treat as answer
 
 
-async def is_question_not_answer(reply: str, slot: str, llm) -> bool:
-    """
-    During slot collection, decide whether the user's reply is answering the asked
-    slot or instead asking a question / making a different request.
-
-    Returns True if the reply is a question/other request (should be answered, not stored).
-    """
-    from langchain_core.prompts import ChatPromptTemplate
-    from langchain_core.output_parsers import StrOutputParser
-
-    prompt = ChatPromptTemplate.from_template("""
-A user is booking a parking spot and was just asked to provide their {slot_label}.
-
-Their reply: "{reply}"
-
-Is the reply actually providing that {slot_label}, or is it a question / a different request
-(e.g. asking about addresses, prices, which option to pick)?
-
-Respond with ONLY one word: ANSWER or QUESTION.
-""")
-    chain = prompt | llm | StrOutputParser()
-    result = await chain.ainvoke({"slot_label": SLOT_LABELS.get(slot, slot), "reply": reply})
-    return "QUESTION" in result.strip().upper()

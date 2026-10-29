@@ -18,7 +18,6 @@ pydantic==2.10.4
 
 # Vector database
 pymilvus==2.4.9
-langchain-milvus==0.1.6
 
 # Database ORM
 sqlalchemy==2.0.36

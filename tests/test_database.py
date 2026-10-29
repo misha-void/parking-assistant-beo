@@ -1,6 +1,5 @@
 """Tests for SQL database models and queries."""
 
-import pytest
 from parking_assistant.db.models import ParkingLocation, ParkingType, ParkingZone, PriceRule, Availability
 from sqlalchemy import func
 

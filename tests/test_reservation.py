@@ -1,6 +1,5 @@
 """Tests for reservation slot collection."""
 
-import pytest
 from parking_assistant.graph.slot_collector import SlotCollector, ReservationSlots
 
 

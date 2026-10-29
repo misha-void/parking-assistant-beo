@@ -21,7 +21,7 @@ from parking_assistant.graph.slot_collector import (
 )
 from parking_assistant.rag.retriever import get_bookable_locations, price_label
 from parking_assistant.db.database import SessionLocal
-from parking_assistant.db.models import Reservation, ReservationStatus, ParkingLocation
+from parking_assistant.db.models import Reservation, ReservationStatus
 from parking_assistant.admin.admin_agent import escalate_to_admin, get_reservation_status
 from parking_assistant.session_registry import set_reservation
 
@@ -77,7 +77,7 @@ async def route_intent(state: State) -> dict:
             state.get("history"), state["user_input"], bookable, get_chat_model())
         loc = next((l for l in bookable if l["id"] == matched_id), None)
         if loc:
-            slots.location_id, slots.location_preference = loc["id"], loc["name"]
+            slots.location_id = loc["id"]
             note = f"Great — booking at {loc['name']}."
         updates = {"intent": "book_spot", "slots": slots.model_dump()}
         if note:
@@ -147,7 +147,7 @@ async def collect(state: State) -> dict:
             idx = int(answer.strip()) - 1
             loc = bookable[idx] if 0 <= idx < len(bookable) else None
         if loc:
-            slots.location_id, slots.location_preference = loc["id"], loc["name"]
+            slots.location_id = loc["id"]
         else:
             note = "Which location would you like? Give the name or the number."
     else:  # start_date / end_date
