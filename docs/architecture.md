@@ -142,6 +142,24 @@ over the labelled queries in `evaluation/eval_dataset.py`:
 - **Intent accuracy** and **source-routing accuracy** end to end.
 - **Latency** — mean, p50, p95, p99 by nearest rank.
 
+Measured on 2026-11-06 (8 labelled retrieval queries, 11 end-to-end):
+
+| Metric | Value |
+|---|---|
+| Precision@3 / Recall@3 | 0.79 / 0.77 |
+| Precision@5 / Recall@5 | 0.80 / 0.90 |
+| Intent classification | 81.8% |
+| Source routing | 81.8% |
+| Answer keyword recall | 85.0% |
+| Latency mean / p50 / p95 | 2927 / 2789 / 5200 ms |
+
+Recall@5 is well above Recall@3 because the pricing query needs a chunk that ranks
+fourth; the two routing misses are both hybrid answers classified as a neighbouring
+intent, which still retrieve the right sources.
+
+**Milvus Lite holds an exclusive lock on its file**, so the evaluation cannot run while
+the chat app is open. Stop the Streamlit app first.
+
 ## 7. Configuration
 
 | Variable | Purpose |
@@ -174,3 +192,5 @@ over the labelled queries in `evaluation/eval_dataset.py`:
 - The approval agent judges only the fields listed above. It cannot check opening hours,
   capacity or overlapping bookings.
 - `admin_app.py` has no authentication — anyone who can reach the port can approve.
+- Milvus Lite is single-process: the chat app and the evaluation script cannot hold the
+  database file at the same time.

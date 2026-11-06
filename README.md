@@ -69,6 +69,7 @@ process confirms a reservation read it, and the service rejects unauthenticated 
 pytest                                  # unit + integration of the graph; uses a scratch DB
 RUN_INTEGRATION_TESTS=1 pytest          # also runs the live Milvus/OpenAI tests
 python scripts/run_evaluation.py        # Recall@K / Precision@K / latency
+                                       # (stop the chat app first: Milvus Lite locks its file)
 ```
 
 The default run needs no API key and does not touch the development database. The tests

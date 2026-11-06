@@ -32,6 +32,9 @@ env/
 # Agent tooling (project settings in .claude/settings.json are checked in)
 .claude/settings.local.json
 
+# Local scratch: presentations, exports, anything not part of the project
+.local/
+
 # IDE
 .idea/
 .vscode/
