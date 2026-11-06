@@ -1,16 +1,22 @@
 """Milvus Lite vector store adapter for parking assistant static data."""
 
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
-from langchain_openai import OpenAIEmbeddings
+import logging
 import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from langchain_openai import OpenAIEmbeddings
+from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
+
+from parking_assistant.llm_factory import get_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 class MilvusVectorStorage:
     """
     Adapter for Milvus Lite with multiple collections for different content types.
-    
+
     Collections:
     - parking_zone_rules: Zone system, time limits, restrictions
     - parking_pricing: Pricing rules, payment methods
@@ -34,7 +40,7 @@ class MilvusVectorStorage:
     def __init__(self, embedding_model: Optional[OpenAIEmbeddings] = None):
         """
         Initialize Milvus connection and embedding model.
-        
+
         Args:
             embedding_model: OpenAIEmbeddings instance (if None, creates default)
         """
@@ -52,11 +58,10 @@ class MilvusVectorStorage:
             alias="default",
             uri=self.milvus_uri
         )
-        print(f"✅ Connected to Milvus Lite at {self.milvus_uri}")
+        logger.info(f"Connected to Milvus Lite at {self.milvus_uri}")
 
         # Initialize embedding model
         if embedding_model is None:
-            from parking_assistant.llm_factory import get_embeddings
             self.embeddings = get_embeddings()
         else:
             self.embeddings = embedding_model
@@ -67,7 +72,7 @@ class MilvusVectorStorage:
     def create_collection(self, collection_name: str, drop_existing: bool = False):
         """
         Create a Milvus collection with schema for text chunks + embeddings.
-        
+
         Args:
             collection_name: Name of the collection
             drop_existing: If True, drop existing collection before creating
@@ -75,11 +80,11 @@ class MilvusVectorStorage:
         # Drop if exists and requested
         if drop_existing and utility.has_collection(collection_name):
             utility.drop_collection(collection_name)
-            print(f"🗑️  Dropped existing collection: {collection_name}")
+            logger.info(f"Dropped existing collection: {collection_name}")
 
         # Skip if already exists
         if utility.has_collection(collection_name):
-            print(f"ℹ️  Collection already exists: {collection_name}")
+            logger.info(f"Collection already exists: {collection_name}")
             return
 
         # Define schema
@@ -106,7 +111,7 @@ class MilvusVectorStorage:
             "params": {"nlist": 128}
         }
         collection.create_index(field_name="embedding", index_params=index_params)
-        print(f"✅ Created collection: {collection_name}")
+        logger.info(f"Created collection: {collection_name}")
 
     def create_all_collections(self, drop_existing: bool = False):
         """Create all parking assistant collections."""
@@ -121,18 +126,18 @@ class MilvusVectorStorage:
     ):
         """
         Embed and insert text chunks into a collection.
-        
+
         Args:
             collection_name: Target collection name
             texts: List of text chunks to insert
             source_file: Name of the source markdown file
         """
         if not texts:
-            print(f"⚠️  No texts to insert for {source_file}")
+            logger.warning(f"No texts to insert for {source_file}")
             return
 
         # Generate embeddings
-        print(f"🔄 Embedding {len(texts)} chunks from {source_file}...")
+        logger.info(f"Embedding {len(texts)} chunks from {source_file}...")
         embeddings = self.embeddings.embed_documents(texts)
 
         # Prepare data
@@ -147,8 +152,8 @@ class MilvusVectorStorage:
         collection = Collection(collection_name)
         collection.insert(data)
         collection.flush()  # Ensure data is persisted
-        
-        print(f"✅ Inserted {len(texts)} chunks into {collection_name}")
+
+        logger.info(f"Inserted {len(texts)} chunks into {collection_name}")
 
     def search(
         self,
@@ -158,12 +163,12 @@ class MilvusVectorStorage:
     ) -> List[Dict[str, Any]]:
         """
         Semantic search in a collection.
-        
+
         Args:
             collection_name: Collection to search in
             query: User's query text
             top_k: Number of results to return
-        
+
         Returns:
             List of dicts with keys: text, score, source_file, chunk_index
         """
@@ -200,9 +205,5 @@ class MilvusVectorStorage:
     def close(self):
         """Close Milvus connection."""
         connections.disconnect(alias="default")
-        print("✅ Disconnected from Milvus")
+        logger.debug("Disconnected from Milvus")
 
-
-def get_vector_store() -> MilvusVectorStorage:
-    """Factory function to get a MilvusVectorStorage instance."""
-    return MilvusVectorStorage()
