@@ -1,0 +1,17 @@
+[project]
+name = "parking-assistant"
+version = "0.1.0"
+description = "Parking lot chat assistant for Belgrade - course project"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: import order, B: bugbear, UP: pyupgrade
+select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs a live OpenAI key and ingested Milvus data"]
