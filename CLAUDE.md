@@ -42,7 +42,7 @@ design and `README.md` for setup and run commands.
 
 ### Open question
 
-- `mcp_server/` is a plain REST service filling the MCP role, **not** a Model Context Protocol
+- `mcp_server.py` is a plain REST service filling the MCP role, **not** a Model Context Protocol
   implementation. Confirm against the course brief whether a protocol-level MCP server is required.
 
 Any decision that changes the above belongs back in this section.
@@ -53,7 +53,7 @@ Any decision that changes the above belongs back in this section.
 
 - **Config read at import time is read before `.env` exists.** A module-level
   `AUTO_APPROVE = os.getenv(...)` silently ignored the setting, and `admin_app.py` /
-  `mcp_server/main.py` read an empty `MCP_API_KEY` and 401'd every write. Entry points call
+  `mcp_server.py` read an empty `MCP_API_KEY` and 401'd every write. Entry points call
   `load_dotenv()` before importing project modules; flags are read inside the function.
 - **`MILVUS_URI` is reserved by pymilvus** for its own HTTP connection and crashes on a file path.
   The project variable is `MILVUS_DB_PATH`.

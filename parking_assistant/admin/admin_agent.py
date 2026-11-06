@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from mcp_server.client import send_confirmed_reservation
+from parking_assistant.admin.mcp_client import send_confirmed_reservation
 from parking_assistant.admin.notifier import send_admin_notification
 from parking_assistant.db.database import SessionLocal
 from parking_assistant.db.models import PriceRule, Reservation, ReservationStatus

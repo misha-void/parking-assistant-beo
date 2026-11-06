@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 os.environ["MCP_API_KEY"] = "test-key"
 os.environ["MCP_RESERVATIONS_FILE"] = "test_confirmed_reservations.txt"
 
-from mcp_server.main import app  # noqa: E402 (env vars must be set first)
+from mcp_server import app  # noqa: E402 (env vars must be set first)
 
 client = TestClient(app)
 

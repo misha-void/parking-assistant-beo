@@ -9,7 +9,7 @@ confirm or refuse each one. Confirming records the booking via the MCP server.
 import streamlit as st
 from dotenv import load_dotenv
 
-# Load .env before importing admin_agent: mcp_server.client reads MCP_API_KEY at import time.
+# Load .env first: admin.mcp_client reads MCP_API_KEY at import time.
 load_dotenv()
 
 from parking_assistant.admin.admin_agent import (  # noqa: E402

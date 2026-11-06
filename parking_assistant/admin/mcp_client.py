@@ -1,4 +1,4 @@
-"""Client for calling the Reservation MCP server (used by the admin agent)."""
+"""The admin agent's side of the MCP call: posts a confirmed reservation to mcp_server.py."""
 
 import os
 import httpx

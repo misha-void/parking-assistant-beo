@@ -1,10 +1,12 @@
-"""MCP server (FastAPI) - Stage 3.
+"""MCP server (Stage 3) - the recording service.
 
-Processes confirmed reservations and persists them to a text file.
-Exposes a single endpoint, protected by an API key header, to prevent
-unauthorized writes. Run separately from the main app:
+A standalone FastAPI service with one endpoint, protected by an API key header so
+only the app can write. It appends confirmed reservations to a text file. Its caller
+lives with the admin agent, in parking_assistant/admin/mcp_client.py.
 
-    uvicorn mcp_server.main:app --port 8001
+Run it separately from the chat app:
+
+    uvicorn mcp_server:app --port 8001
 """
 
 import os

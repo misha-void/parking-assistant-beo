@@ -20,7 +20,7 @@ document describes the system as the code actually behaves.
          └──────┬───────────────────┬─────────────────┘   └─ decide_reservation / _apply_decision
                 │ RAG               │ ORM                              │ REST + API key
                 ▼                   ▼                                  ▼
-        rag/chain.py          SQLite (SQLAlchemy)              mcp_server/ (FastAPI)
+        rag/chain.py          SQLite (SQLAlchemy)              mcp_server.py (FastAPI)
         ├─ intent_classifier  ├─ parking_location                └─ confirmed_reservations.txt
         ├─ retriever          ├─ price_rule / working_hours
         │   ├─ Milvus Lite    ├─ availability
@@ -101,7 +101,7 @@ interpretation and review, so routing and extracted values are reproducible.
 
 ## 4. Server logic — the MCP service
 
-`mcp_server/main.py` is a small FastAPI service with one endpoint,
+`mcp_server.py` is a small FastAPI service with one endpoint,
 `POST /reservations/confirmed`, protected by an `x-api-key` header compared in constant
 time. It appends one line per booking under a lock:
 
@@ -109,7 +109,7 @@ time. It appends one line per booking under a lock:
 Name | Car Number | Period | Approval Time
 ```
 
-`mcp_server/client.py` posts to it when a reservation is confirmed. It never raises — a
+`parking_assistant/admin/mcp_client.py` posts to it when a reservation is confirmed. It never raises — a
 failed write must not block an approval — but it checks the response status and returns
 `False`, and the admin sees a warning, so a lost record cannot look like success.
 
@@ -155,7 +155,7 @@ over the labelled queries in `evaluation/eval_dataset.py`:
 |---|---|
 | 1 — RAG, vector DB, reservation collection, guardrails, evaluation | `rag/`, `graph/slots.py`, `guardrails/`, `evaluation/` |
 | 2 — Admin approval agent | `admin/admin_agent.py`, `admin/notifier.py`, `admin_app.py` |
-| 3 — MCP server | `mcp_server/` |
+| 3 — MCP server | `mcp_server.py` + `admin/mcp_client.py` |
 | 4 — LangGraph orchestration | `graph/pipeline.py`, `service.py`, `app.py` |
 
 ## 9. Known limitations

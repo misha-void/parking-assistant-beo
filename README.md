@@ -49,7 +49,7 @@ python data_ingestions/ingest_static_to_milvus.py  # embed the static docs into 
 
 ```bash
 # Recording service (needs MCP_API_KEY set in .env)
-uvicorn mcp_server.main:app --port 8001
+uvicorn mcp_server:app --port 8001
 
 # Chat UI
 streamlit run app.py
@@ -91,7 +91,7 @@ parking_assistant/
 ├── service.py              # fail-safe entry point used by the UI
 ├── session_registry.py     # session → reservation, for status polling
 └── chat_logger.py          # appends each turn to .logs/ for review
-mcp_server/                 # FastAPI recording service + its client
+mcp_server.py               # the MCP recording service (FastAPI, run on its own)
 data/                       # static docs (Milvus) + parking_locations.json (SQLite)
 data_ingestions/            # seed and ingest scripts
 docs/architecture.md        # full architecture
