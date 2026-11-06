@@ -1,1 +1,1 @@
-"""LangGraph module - state machine for multi-step reservation flow."""
+"""LangGraph orchestration: the conversation graph and its reservation slots."""

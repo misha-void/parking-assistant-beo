@@ -1,9 +1,9 @@
 """Database configuration and session management."""
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 import os
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Database URL (SQLite file-based)
 # Production would use: postgresql://user:pass@host/db
@@ -23,46 +23,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-def get_db():
-    """
-    Dependency for getting a database session.
-    Usage: 
-        session = SessionLocal()
-        try:
-            # use session
-        finally:
-            session.close()
-    
-    Or in FastAPI:
-        def get_db():
-            db = SessionLocal()
-            try:
-                yield db
-            finally:
-                db.close()
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def init_db():
     """
     Initialize database (create all tables).
     Call this from ingestion scripts or on first run.
-    
+
     Note: For production, use Alembic migrations instead of create_all()
     """
-    # Import all models so they're registered with Base
+    # Imported for their side effect: this registers every model on Base.metadata
+    # so create_all() knows about them.  # noqa: F401
     from parking_assistant.db.models import (
-        ParkingLocation, 
-        PriceRule, 
-        WorkingHours, 
+        ParkingLocation,
+        PriceRule,
+        WorkingHours,
         Availability,
         Reservation
     )
-    
+
     Base.metadata.create_all(bind=engine)
     print("✅ Database initialized (all tables created)")
