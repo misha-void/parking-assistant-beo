@@ -53,7 +53,10 @@ def test_writes_correctly_formatted_line_with_valid_key():
     with open(os.environ["MCP_RESERVATIONS_FILE"], encoding="utf-8") as f:
         line = f.readline()
 
-    assert line.strip() == "John Doe | BG123AB | 2024-01-01 10:00 to 2024-01-01 18:00 | 2024-01-01T09:00:00"
+    expected = (
+        "John Doe | BG123AB | 2024-01-01 10:00 to 2024-01-01 18:00 | 2024-01-01T09:00:00"
+    )
+    assert line.strip() == expected
 
 
 def test_appends_multiple_entries():
