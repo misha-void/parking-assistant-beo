@@ -28,7 +28,7 @@ class ParkingZone(enum.Enum):
 class ParkingLocation(Base):
     """
     Parking locations in Belgrade.
-    
+
     Represents physical parking facilities (garages, car parks, reserved garages)
     with their static attributes.
     """
@@ -37,7 +37,8 @@ class ParkingLocation(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False, index=True)
     type = Column(Enum(ParkingType), nullable=False, index=True)
-    zone = Column(Enum(ParkingZone), nullable=True, index=True)  # Null for garages not in street zones
+    # Null for garages that are not part of a street zone
+    zone = Column(Enum(ParkingZone), nullable=True, index=True)
     address = Column(String(500), nullable=False)
     capacity = Column(Integer, nullable=False)  # Total number of parking spots
     latitude = Column(Float, nullable=True)
@@ -46,16 +47,21 @@ class ParkingLocation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    availability_records = relationship("Availability", back_populates="location", cascade="all, delete-orphan")
+    availability_records = relationship(
+        "Availability", back_populates="location", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
-        return f"<ParkingLocation(id={self.id}, name='{self.name}', type={self.type.value}, zone={self.zone})>"
+        return (
+            f"<ParkingLocation(id={self.id}, name='{self.name}', "
+            f"type={self.type.value}, zone={self.zone})>"
+        )
 
 
 class PriceRule(Base):
     """
     Pricing rules per zone.
-    
+
     Stores hourly rates, maximum parking duration, and extension times
     for each parking zone in Belgrade.
     """
@@ -65,18 +71,22 @@ class PriceRule(Base):
     zone = Column(Enum(ParkingZone), nullable=False, unique=True, index=True)
     hourly_rate_rsd = Column(Integer, nullable=False)  # Price in Serbian Dinars per hour
     max_duration_minutes = Column(Integer, nullable=False)  # Maximum continuous parking time
-    extended_time_minutes = Column(Integer, nullable=True)  # Additional time allowed after max duration
+    # Additional time allowed after the maximum duration
+    extended_time_minutes = Column(Integer, nullable=True)
     cooldown_minutes = Column(Integer, default=30)  # Time before you can park in same zone again
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
-        return f"<PriceRule(zone={self.zone.value}, rate={self.hourly_rate_rsd} RSD/h, max={self.max_duration_minutes}min)>"
+        return (
+            f"<PriceRule(zone={self.zone.value}, rate={self.hourly_rate_rsd} RSD/h, "
+            f"max={self.max_duration_minutes}min)>"
+        )
 
 
 class WorkingHours(Base):
     """
     Parking control and payment working hours per zone.
-    
+
     Defines when parking control applies and payment is required
     for each zone and day of week.
     """
@@ -92,7 +102,10 @@ class WorkingHours(Base):
 
     def __repr__(self):
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        return f"<WorkingHours(zone={self.zone.value}, {days[self.day_of_week]} {self.open_time}-{self.close_time})>"
+        return (
+            f"<WorkingHours(zone={self.zone.value}, {days[self.day_of_week]} "
+            f"{self.open_time}-{self.close_time})>"
+        )
 
 
 class Availability(Base):
@@ -115,7 +128,11 @@ class Availability(Base):
     location = relationship("ParkingLocation", back_populates="availability_records")
 
     def __repr__(self):
-        return f"<Availability(location_id={self.location_id}, available={self.available_spots}/{self.occupied_spots + self.available_spots})>"
+        total_spots = self.occupied_spots + self.available_spots
+        return (
+            f"<Availability(location_id={self.location_id}, "
+            f"available={self.available_spots}/{total_spots})>"
+        )
 
 
 class ReservationStatus(enum.Enum):
@@ -149,8 +166,15 @@ class Reservation(Base):
     end_datetime = Column(DateTime(timezone=True), nullable=False)
 
     # Workflow
-    status = Column(Enum(ReservationStatus), nullable=False, default=ReservationStatus.PENDING_APPROVAL, index=True)
-    approval_token = Column(String(64), unique=True, nullable=True, index=True)  # used in admin email links
+    status = Column(
+        Enum(ReservationStatus),
+        nullable=False,
+        default=ReservationStatus.PENDING_APPROVAL,
+        index=True,
+    )
+    # unused: kept to avoid a migration
+    approval_token = Column(String(64), unique=True, nullable=True, index=True)
+    decision_reason = Column(String(300), nullable=True)  # one-line reason for approve/refuse
 
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -160,4 +184,7 @@ class Reservation(Base):
     location = relationship("ParkingLocation")
 
     def __repr__(self):
-        return f"<Reservation(id={self.id}, user={self.user_name} {self.user_surname}, status={self.status.value})>"
+        return (
+            f"<Reservation(id={self.id}, user={self.user_name} {self.user_surname}, "
+            f"status={self.status.value})>"
+        )

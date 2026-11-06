@@ -7,12 +7,14 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8001")
 MCP_API_KEY = os.getenv("MCP_API_KEY", "")
 
 
-def send_confirmed_reservation(name: str, car_number: str, reservation_period: str, approval_time: str) -> None:
+def send_confirmed_reservation(
+    name: str, car_number: str, reservation_period: str, approval_time: str
+) -> bool:
     """
     Notify the MCP server that a reservation was confirmed, so it can
     persist it to file storage. Never raises: a failure is logged but must
-    not block admin approval. Both transport errors and rejected writes
-    (e.g. 401 from a missing API key) are reported.
+    not block admin approval. Returns True on success, False on a rejected
+    write (e.g. 401 from a missing API key) or a transport error.
     """
     payload = {
         "name": name,
@@ -28,6 +30,10 @@ def send_confirmed_reservation(name: str, car_number: str, reservation_period: s
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
-        print(f"[MCP client] MCP server rejected the write: {e.response.status_code} {e.response.text}")
+        print("[MCP client] MCP server rejected the write: "
+              f"{e.response.status_code} {e.response.text}")
+        return False
     except httpx.RequestError as e:
         print(f"[MCP client] Failed to reach MCP server: {e}")
+        return False
+    return True

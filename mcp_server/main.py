@@ -12,8 +12,12 @@ import secrets
 import threading
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
+
+# Load .env before reading any env var below (MCP_API_KEY is read at import time).
+load_dotenv()
 
 MCP_API_KEY = os.getenv("MCP_API_KEY", "")
 RESERVATIONS_FILE = os.getenv("MCP_RESERVATIONS_FILE", "confirmed_reservations.txt")
@@ -44,7 +48,8 @@ def write_confirmed_reservation(
     """Append a confirmed reservation to storage. Format: Name | Car | Period | Approval Time."""
     _verify_api_key(x_api_key)
 
-    line = f"{record.name} | {record.car_number} | {record.reservation_period} | {record.approval_time}\n"
+    line = (f"{record.name} | {record.car_number} | {record.reservation_period} | "
+            f"{record.approval_time}\n")
     with _write_lock:
         with open(RESERVATIONS_FILE, "a", encoding="utf-8") as f:
             f.write(line)
