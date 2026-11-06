@@ -1,8 +1,11 @@
 """The admin agent's side of the MCP call: posts a confirmed reservation to mcp_server.py."""
 
+import logging
 import os
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8001")
 MCP_API_KEY = os.getenv("MCP_API_KEY", "")
@@ -31,10 +34,10 @@ def send_confirmed_reservation(
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
-        print("[MCP client] MCP server rejected the write: "
-              f"{e.response.status_code} {e.response.text}")
+        logger.error("MCP server rejected the write: %s %s",
+                     e.response.status_code, e.response.text)
         return False
     except httpx.RequestError as e:
-        print(f"[MCP client] Failed to reach MCP server: {e}")
+        logger.error("Failed to reach the MCP server: %s", e)
         return False
     return True

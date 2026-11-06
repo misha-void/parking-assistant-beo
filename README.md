@@ -21,7 +21,7 @@ The whole conversation is orchestrated as a single **LangGraph** graph — see
   static documents, SQLite for live availability and per-location prices.
 - **Booking** — six slots collected one question at a time. Each question is a LangGraph
   `interrupt()`, so the next message resumes the same graph run. Asking a question
-  mid-booking gets answered, then the slot is asked again.
+  mid-booking gets answered, then the slot is asked again; saying "cancel" abandons it.
 - **Approval** — by default an LLM agent reviews the request and approves or refuses it with
   a reason. Set `AUTO_APPROVE=false` to require the human in `admin_app.py` instead.
 - **Recording** — on confirmation the booking is posted to the MCP service, which appends
@@ -41,7 +41,7 @@ python -m spacy download en_core_web_sm        # for the Presidio guardrail
 cp .env.example .env                            # then add your OPENAI_API_KEY
 
 # 4. Data
-python data_ingestions/seed_dynamic_db.py          # seed SQLite (safe to re-run)
+python data_ingestions/seed_dynamic_db.py          # seed SQLite (re-runnable, but WIPES reservations)
 python data_ingestions/ingest_static_to_milvus.py  # embed the static docs into Milvus
 ```
 
@@ -107,6 +107,9 @@ tests/ · scripts/           # pytest suite · evaluation runner
 | `MCP_SERVER_URL`, `MCP_API_KEY` | the recording service |
 | `MILVUS_DB_PATH` | Milvus Lite file (**not** `MILVUS_URI`, which pymilvus reserves) |
 | `SMTP_*`, `ADMIN_EMAIL` | admin email; unset prints the notification to the console |
+| `DATABASE_URL` | SQLite file (default `sqlite:///./parking_assistant.db`) |
+| `MCP_RESERVATIONS_FILE` | where the service appends records (default `confirmed_reservations.txt`) |
+| `CHAT_LOG_DIR` | per-turn chat logs (default `.logs`) |
 
 ## Stage status
 
@@ -117,4 +120,4 @@ tests/ · scripts/           # pytest suite · evaluation runner
 
 Known limitations are listed in [docs/architecture.md](docs/architecture.md#9-known-limitations).
 
-Learning project — MIT License.
+Course project, built for learning.

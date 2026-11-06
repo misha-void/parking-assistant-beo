@@ -14,10 +14,22 @@ def price_label(price) -> str:
     return f"{price} RSD/hour" if price else "price varies (private garage)"
 
 
+def zone_label(zone: str | None) -> str:
+    """Turn a stored zone value such as 'green_3' into 'Green 3' for display."""
+    return zone.replace("_", " ").title() if zone else ""
+
+
 def format_location_line(loc: dict[str, Any]) -> str:
-    """Render one location as '- name — address — price [— N spots]'."""
-    address = loc.get("address", "address n/a")
-    line = f"- {loc.get('name')} — {address} — {price_label(loc.get('price'))}"
+    """Render one location as '- name — address — zone — price [— N spots]'.
+
+    The zone is included because the pricing context lists rates per zone: without it
+    the model had to guess which zone a location belonged to, and invented the link.
+    """
+    parts = [f"- {loc.get('name')}", loc.get("address", "address n/a")]
+    zone = zone_label(loc.get("zone"))
+    parts.append(f"{zone} zone" if zone else "no zone")
+    parts.append(price_label(loc.get("price")))
+    line = " — ".join(parts)
     available = loc.get("available")
     if available is not None:
         capacity = loc.get("capacity")

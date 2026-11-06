@@ -104,9 +104,11 @@ class EvaluationReport:
 # --------------------------------------------------------------------------- computation
 
 def search_top_k(store: MilvusVectorStorage, query: str, k: int) -> list[dict]:
-    """Search every collection and merge by score (same strategy as Retriever).
+    """Search every collection and merge by score, keeping the best k overall.
 
-    Takes k hits from each collection so that the merged top-k is exact.
+    Taking k from each collection before merging makes the merged top-k exact. Note
+    this is not identical to `Retriever.retrieve_general_info`, which takes a fixed 2
+    per collection, so these figures measure the index rather than that one caller.
     """
     hits = []
     for collection in store.ALL_COLLECTIONS:

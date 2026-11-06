@@ -3,8 +3,8 @@
 Parking Lot Chat Assistant (Belgrade) — a four-stage course project done at work, not production
 code. Read this file first: it records the decisions that are not obvious from the code.
 
-Everything agent-related lives under `.claude/` plus this file. See `docs/architecture.md` for the
-design and `README.md` for setup and run commands.
+Claude Code settings live in `.claude/settings.json`. See `docs/architecture.md` for the design
+and `README.md` for setup and run commands.
 
 ---
 
@@ -21,8 +21,9 @@ design and `README.md` for setup and run commands.
   `graph/slots.py`.
 - **Interface**: Streamlit only — `app.py` (chat) and `admin_app.py` (admin override). The
   FastAPI chat backend (`api.py`) was deleted in Stage 4 to keep the codebase small.
-- **Vector DB**: Milvus Lite, embedded, called directly from `rag/retriever.py`. There is no
-  adapter layer; swapping to Pinecone/Weaviate would mean editing that module.
+- **Vector DB**: Milvus Lite, embedded. `rag/vector_store.py` is the only module that imports
+  pymilvus; `rag/retriever.py` goes through it. It is one concrete class, not an interface, so
+  swapping to Pinecone/Weaviate means rewriting that class.
 - **Dynamic data**: SQLite via SQLAlchemy — locations, prices, working hours, availability,
   reservations. Static documents are embedded into Milvus.
 - **LLM**: OpenAI only, via `llm_factory.py` — `gpt-4o-mini` and `text-embedding-3-small`.

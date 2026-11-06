@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from langchain_openai import OpenAIEmbeddings
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
 
 from parking_assistant.llm_factory import get_embeddings
@@ -37,13 +36,8 @@ class MilvusVectorStorage:
         COLLECTION_FAQ
     ]
 
-    def __init__(self, embedding_model: OpenAIEmbeddings | None = None):
-        """
-        Initialize Milvus connection and embedding model.
-
-        Args:
-            embedding_model: OpenAIEmbeddings instance (if None, creates default)
-        """
+    def __init__(self):
+        """Connect to Milvus Lite and prepare the embedding model."""
         # Use Milvus Lite (embedded, file-based).
         # NOTE: the env var is MILVUS_DB_PATH, not MILVUS_URI — pymilvus reserves
         # MILVUS_URI for its own default (http) connection and fails to import if
@@ -60,11 +54,7 @@ class MilvusVectorStorage:
         )
         logger.info(f"Connected to Milvus Lite at {self.milvus_uri}")
 
-        # Initialize embedding model
-        if embedding_model is None:
-            self.embeddings = get_embeddings()
-        else:
-            self.embeddings = embedding_model
+        self.embeddings = get_embeddings()
 
         # Embedding dimension for text-embedding-3-small
         self.embedding_dim = 1536

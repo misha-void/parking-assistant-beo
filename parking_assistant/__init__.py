@@ -6,5 +6,3 @@ This package provides:
 - PII guardrails on retrieved context and generated answers
 - An admin approval agent, with a Streamlit app for the human override
 """
-
-__version__ = "0.1.0"

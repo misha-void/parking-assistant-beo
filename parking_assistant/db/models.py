@@ -137,10 +137,9 @@ class Availability(Base):
 
 class ReservationStatus(enum.Enum):
     """Reservation workflow states."""
-    PENDING_APPROVAL = "pending_approval"  # Submitted, waiting for staff review
-    CONFIRMED = "confirmed"                # Approved by staff
-    CANCELLED = "cancelled"                # Cancelled by user or staff
-    COMPLETED = "completed"                # Reservation period ended
+    PENDING_APPROVAL = "pending_approval"  # Submitted, waiting for review
+    CONFIRMED = "confirmed"                # Approved
+    CANCELLED = "cancelled"                # Refused by the approval agent or the admin
 
 
 class Reservation(Base):
@@ -148,8 +147,7 @@ class Reservation(Base):
     Parking spot reservations.
 
     Stores user reservation requests with personal details.
-    Status workflow: pending_approval -> confirmed -> completed
-    (or cancelled at any stage).
+    Status workflow: pending_approval -> confirmed, or -> cancelled if refused.
     """
     __tablename__ = "reservation"
 
@@ -172,8 +170,6 @@ class Reservation(Base):
         default=ReservationStatus.PENDING_APPROVAL,
         index=True,
     )
-    # unused: kept to avoid a migration
-    approval_token = Column(String(64), unique=True, nullable=True, index=True)
     decision_reason = Column(String(300), nullable=True)  # one-line reason for approve/refuse
 
     # Metadata

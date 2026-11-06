@@ -16,14 +16,21 @@ Answer the user's latest question using ONLY the Context and the Conversation be
 
 Rules:
 - Never invent prices, hours, counts or locations that are not in the Context.
-- If the Context lists locations, show every one on its own line with its price (RSD/hour).
-- For "cheapest" or "most expensive", compare the listed prices and name the winner.
-- State the exact number of options; do not say "several" or "a few".
+- Asked to list or find parking, show every location in the Context on its own line
+  with its price (RSD/hour), and say how many there are.
+- Asked for the "cheapest" or "most expensive", compare the prices and give only the
+  winner with its price. Do not list the others and do not state a total count.
+- Never say "several" or "a few" when the Context lets you be exact.
+- Each location line states its zone. Never work out a location's zone from the zone
+  price list, and never claim a zone that is not stated on that location's own line.
+- Greeted, or asked what you can do: say briefly that you answer questions about
+  parking in Belgrade and can book a spot. Ignore the Context for that.
 - If the Context lacks the answer, say so briefly and offer related help.
 - Use the Conversation to resolve follow-ups; do not re-ask for details already given.
 - Be concise. Never mention the words "context" or "retrieved".
 - Only if you listed bookable locations, end with one short offer to book
-  (e.g. "Would you like to book a spot?"); otherwise do not offer to book.
+  (e.g. "Would you like to book a spot?"); otherwise do not offer to book and do not
+  end with filler such as "let me know if you need anything else".
 
 Conversation so far:
 {history}
@@ -39,8 +46,11 @@ Your response:"""
 class RAGChain:
     """Orchestrates the full RAG pipeline."""
 
-    def __init__(self, llm, enable_guardrails: bool = True):
+    def __init__(self, llm, classifier_llm=None, enable_guardrails: bool = True):
         self.llm = llm
+        # Routing is a classification, so it belongs on a deterministic model. Callers
+        # that pass only `llm` keep the previous single-model behaviour.
+        self.classifier_llm = classifier_llm or llm
         self.retriever = Retriever()
         self.response_prompt = ChatPromptTemplate.from_template(RAG_RESPONSE_PROMPT)
         self.enable_guardrails = enable_guardrails
@@ -59,7 +69,8 @@ class RAGChain:
         return await self.retriever.retrieve_general_info(query)
 
     async def run(
-        self, query: str, history: list = None, remembered_locations: list = None
+        self, query: str, history: list = None, remembered_locations: list = None,
+        note: str = "",
     ) -> dict[str, Any]:
         """
         Execute full RAG pipeline.
@@ -69,11 +80,12 @@ class RAGChain:
             history: Prior messages [{"role", "content"}], oldest first, excluding query
             remembered_locations: parking options shown earlier, so follow-ups
                 ("address?", "are those different?") can be answered from them
+            note: an extra instruction for this turn, e.g. that a booking is under way
 
         Returns:
             Dict with 'intent', 'context', 'response', 'locations', 'metadata'
         """
-        intent = await classify_intent(query, self.llm, history)
+        intent = await classify_intent(query, self.classifier_llm, history)
 
         if intent == "book_spot":
             # Signal that the reservation flow should start; the graph handles the reply
@@ -90,10 +102,15 @@ class RAGChain:
         if self.enable_guardrails and context:
             context = self.guardrail.filter_retrieved_context(context)
 
-        # Add earlier-shown options so follow-up questions have the data
-        if remembered_locations:
+        # Add earlier-shown options so follow-up questions have the data. Skipped when
+        # retrieval produced its own list, which would otherwise appear twice in the
+        # context, possibly with different spot counts.
+        if remembered_locations and not retrieval_result.get("locations"):
             remembered = "\n".join(format_location_line(loc) for loc in remembered_locations)
             context += "\n\n[Parking options shown earlier]\n" + remembered
+
+        if note:
+            context += "\n\n[Note for this turn]\n" + note
 
         chain = self.response_prompt | self.llm | StrOutputParser()
         response = await chain.ainvoke({

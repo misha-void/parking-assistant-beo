@@ -78,13 +78,16 @@ class PIIGuardrail:
             for r in results
         ]
 
-    def anonymize_pii(self, text: str, entities: list[str] = None) -> tuple[str, bool]:
+    def anonymize_pii(
+        self, text: str, entities: list[str] = None, score_threshold: float = 0.0
+    ) -> tuple[str, bool]:
         """
         Anonymize PII in text by replacing with placeholders.
 
         Args:
             text: Text to anonymize
             entities: Entity types to anonymize (uses SECRET_ENTITIES if None)
+            score_threshold: ignore detections Presidio is less confident about
 
         Returns:
             Tuple of (anonymized_text, was_modified)
@@ -92,11 +95,11 @@ class PIIGuardrail:
         if entities is None:
             entities = self.SECRET_ENTITIES
 
-        # Analyze
         results = self.analyzer.analyze(
             text=text,
             entities=entities,
-            language=self.language
+            language=self.language,
+            score_threshold=score_threshold,
         )
 
         if not results:
@@ -115,28 +118,13 @@ class PIIGuardrail:
         return anonymized.text, True
 
     def filter_retrieved_context(self, context: str, threshold: float = 0.5) -> str:
+        """Redact secrets (see SECRET_ENTITIES) from retrieved context before the LLM.
+
+        `threshold` drops low-confidence detections. It used to be applied only as a
+        trigger: anything above it caused a second, unthresholded pass that redacted
+        every hit, including the ones the threshold was meant to ignore.
         """
-        Filter PII from retrieved context before sending to LLM.
-
-        Aggressively filters to prevent leaking sensitive data from vector DB.
-
-        Args:
-            context: Retrieved context text
-            threshold: Confidence threshold for filtering (lower = more aggressive)
-
-        Returns:
-            Filtered context
-        """
-        # Detect only genuine secrets
-        pii_entities = self.detect_pii(context)
-
-        high_conf_entities = [e for e in pii_entities if e["score"] >= threshold]
-
-        if not high_conf_entities:
-            return context
-
-        # Anonymize just those entity types
-        filtered, _ = self.anonymize_pii(context)
+        filtered, _ = self.anonymize_pii(context, score_threshold=threshold)
         return filtered
 
     def filter_llm_output(self, text: str) -> str:

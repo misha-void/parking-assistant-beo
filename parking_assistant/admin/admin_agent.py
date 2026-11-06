@@ -55,7 +55,8 @@ REVIEW_PROMPT = ChatPromptTemplate.from_template(
     "End: {end}\n"
     "Duration: {hours:.1f} hours\n\n"
     "Answer in exactly two lines. Line 1: APPROVE or REFUSE. "
-    "Line 2: the reason, at most 15 words."
+    "Line 2: the reason, at most 15 words, naming the location and the duration "
+    "so it is clear which booking it refers to."
 )
 
 
@@ -158,9 +159,10 @@ async def auto_review_reservation(reservation_id: int, llm) -> tuple[str, str]:
             })
             parsed = _parse_review(text)
         except Exception:
+            logger.exception("Approval review failed for reservation %s", reservation_id)
             parsed = None
         if parsed is None:
-            return "pending", "Could not parse review."
+            return "pending", "Automatic review was inconclusive; left for the admin."
 
         decision, reason = parsed
         reservation.decision_reason = reason
@@ -174,8 +176,9 @@ async def auto_review_reservation(reservation_id: int, llm) -> tuple[str, str]:
             reason = f"{reason} (note: it could not be recorded to the MCP server)"
         return decision, reason
     except Exception:
+        logger.exception("Could not review reservation %s", reservation_id)
         session.rollback()
-        return "pending", "Could not parse review."
+        return "pending", "Automatic review failed; left for the admin."
     finally:
         session.close()
 

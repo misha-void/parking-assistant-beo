@@ -20,10 +20,10 @@ PIPELINE = "parking_assistant.graph.pipeline"
 class FakeRAGChain:
     """Routes anything mentioning "book" into the reservation flow, else answers."""
 
-    def __init__(self, llm):
+    def __init__(self, llm, classifier_llm=None, enable_guardrails=True):
         pass
 
-    async def run(self, query, history=None, remembered_locations=None):
+    async def run(self, query, history=None, remembered_locations=None, note=""):
         if "book" in query.lower():
             return {"intent": "book_spot", "response": None, "locations": None}
         return {
@@ -171,3 +171,64 @@ async def test_question_mid_booking_is_answered_then_the_slot_is_asked_again():
 
     assert "30 minutes" in reply  # the aside was answered
     assert "first name" in reply.lower()  # and the slot re-asked in the same turn
+
+
+@pytest.mark.asyncio
+async def test_a_numbered_location_choice_skips_the_extraction_model():
+    """Regression: the question numbers the options, the model only sees their names.
+
+    It therefore cannot map "1" to a location, and used to answer "unclear", leaving the
+    user stuck on a list they were invited to pick from by number. A digit now bypasses
+    interpretation entirely. Forcing "unclear" for that slot proves the bypass.
+    """
+    async def unclear_for_location(slot, reply, history, llm, locations=None, start_iso=None):
+        if slot == "location_id":
+            return {"kind": "unclear", "value": ""}
+        return await fake_interpret(slot, reply, history, llm, locations, start_iso)
+
+    session_id = f"test-{uuid.uuid4()}"
+    with patched_pipeline(), patch(f"{PIPELINE}.interpret_slot_reply", new=unclear_for_location):
+        await run_turn(session_id, "I want to book")
+        for reply in ("John", "Doe", "BG123AB"):
+            await run_turn(session_id, reply)
+        reply = await run_turn(session_id, "1")
+
+    assert "when would you like to start" in reply.lower()
+    assert "still need" not in reply.lower()
+
+
+@pytest.mark.asyncio
+async def test_the_location_list_is_shown_again_when_the_choice_fails(db_session):
+    """The list used to appear only on the first ask, so a retry had nothing to pick from."""
+    location_name = db_session.query(ParkingLocation).first().name
+
+    async def unclear_for_location(slot, reply, history, llm, locations=None, start_iso=None):
+        if slot == "location_id":
+            return {"kind": "unclear", "value": ""}
+        return await fake_interpret(slot, reply, history, llm, locations, start_iso)
+
+    session_id = f"test-{uuid.uuid4()}"
+    with patched_pipeline(), patch(f"{PIPELINE}.interpret_slot_reply", new=unclear_for_location):
+        await run_turn(session_id, "I want to book")
+        for reply in ("John", "Doe", "BG123AB"):
+            await run_turn(session_id, reply)
+        retry = await run_turn(session_id, "somewhere nice")
+
+    assert "still need" in retry.lower()
+    assert location_name in retry
+
+
+@pytest.mark.asyncio
+async def test_a_correction_at_confirmation_does_not_cancel_the_booking(db_session):
+    """"no" alone cancels, but "no, change ..." is a correction and must keep the slots."""
+    session_id = f"test-{uuid.uuid4()}"
+    with patched_pipeline():
+        await drive_to_confirmation(session_id)
+        reply = await run_turn(session_id, "no, change the end time to 6pm")
+
+        assert "cancelled" not in reply.lower()
+        assert "yes" in reply.lower()  # asked again instead
+        final = await run_turn(session_id, "yes")
+        assert "approved" in final.lower()
+
+    delete_test_reservation(db_session)

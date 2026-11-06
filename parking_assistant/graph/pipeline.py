@@ -40,7 +40,7 @@ from parking_assistant.graph.slots import (
 from parking_assistant.llm_factory import get_chat_model, get_extraction_model
 from parking_assistant.rag.chain import RAGChain
 from parking_assistant.rag.retriever import get_bookable_locations, price_label
-from parking_assistant.session_registry import set_reservation
+from parking_assistant.session_registry import get_reservation, set_reservation
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,8 @@ AFFIRMATIVE_REPLIES = {
     "yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay",
     "confirm", "confirmed", "correct", "right", "go ahead",
 }
-NEGATIVE_REPLIES = {"no", "n", "nope", "cancel", "nevermind", "never mind", "stop", "abort"}
+# Just the refusals: run_turn intercepts "cancel", "stop" and friends before this point.
+NEGATIVE_REPLIES = {"no", "n", "nope"}
 
 # Typed while a booking is in progress, these abandon it.
 CANCEL_REPLIES = {"cancel", "stop", "quit", "nevermind", "never mind", "abort"}
@@ -85,9 +86,15 @@ class ChatState(TypedDict, total=False):
 
 
 def _is_status_question(text: str) -> bool:
-    """True if the message asks about the user's existing reservation."""
+    """True if the message asks about the user's existing reservation.
+
+    The bare word "status" only counts in a short message: as a plain substring it
+    hijacked questions like "what's the status of the Slavija garage, is it full?".
+    """
     lowered = text.lower()
-    return "status" in lowered or any(phrase in lowered for phrase in STATUS_PHRASES)
+    if any(phrase in lowered for phrase in STATUS_PHRASES):
+        return True
+    return "status" in lowered and len(lowered.split()) <= 4
 
 
 def _asks_to_modify(text: str) -> bool:
@@ -102,11 +109,15 @@ def _describe_status(reservation_id: int) -> str:
     return f"Your reservation #{reservation_id} is {described}."
 
 
-async def _answer_with_rag(question: str, state: ChatState) -> dict:
-    """Run the RAG chain for one question, with conversation and earlier options."""
-    chain = RAGChain(get_chat_model())
+async def _answer_with_rag(question: str, state: ChatState, note: str = "") -> dict:
+    """Run the RAG chain for one question, with conversation and earlier options.
+
+    The conversational model writes the answer, but intent routing goes through the
+    temperature-0 model so the same message always takes the same branch.
+    """
+    chain = RAGChain(get_chat_model(), classifier_llm=get_extraction_model())
     try:
-        return await chain.run(question, state.get("history"), state.get("locations"))
+        return await chain.run(question, state.get("history"), state.get("locations"), note)
     finally:
         chain.close()
 
@@ -132,7 +143,9 @@ async def _start_booking(state: ChatState) -> dict:
 async def route_message(state: ChatState) -> dict:
     """Answer a status question, answer an info question, or start a booking."""
     message = state["user_input"]
-    reservation_id = state.get("reservation_id")
+    # Fall back to the registry: cancelling a booking starts a fresh checkpoint thread,
+    # so graph state loses the id of a reservation made earlier in the session.
+    reservation_id = state.get("reservation_id") or get_reservation(state.get("session_id", ""))
 
     if reservation_id and _is_status_question(message):
         if _asks_to_modify(message):
@@ -145,7 +158,14 @@ async def route_message(state: ChatState) -> dict:
             }
         return {"intent": "status", "response": _describe_status(reservation_id)}
 
-    result = await _answer_with_rag(message, state)
+    note = ""
+    if reservation_id:
+        note = (
+            f"The user has already submitted reservation #{reservation_id}. It cannot be "
+            "changed or cancelled in this chat - if they ask to, tell them to contact the "
+            "parking administrator."
+        )
+    result = await _answer_with_rag(message, state, note)
     if result["intent"] == "book_spot":
         return await _start_booking(state)
 
@@ -156,9 +176,13 @@ async def route_message(state: ChatState) -> dict:
 
 
 def _question_for(slot: str, bookable: list, prefix: str) -> str:
-    """Build the question for one slot, listing locations only on the first ask."""
+    """Build the question for one slot, always listing the options for the location.
+
+    The list is shown on retries too: a prefix here is an error or an aside, and the
+    user needs the numbered options in front of them to answer again.
+    """
     question = SLOT_PROMPTS[slot]
-    if slot == "location_id" and not prefix:
+    if slot == "location_id":
         options = "\n".join(
             f"{number}. {loc['name']} - {loc['address']} - {price_label(loc['price'])}"
             for number, loc in enumerate(bookable, start=1)
@@ -232,13 +256,22 @@ async def collect_slot(state: ChatState) -> dict:
     bookable = get_bookable_locations()
     reply = interrupt(_question_for(slot, bookable, state.get("prompt_prefix") or ""))
 
-    interpreted = await interpret_slot_reply(
-        slot, reply, state.get("history"), get_extraction_model(),
-        locations=bookable, start_iso=slots.start_iso,
-    )
+    if slot == "location_id" and reply.strip().isdigit():
+        # The question numbers the options, but the extraction model is only shown their
+        # names, so it cannot map "2" to one. _store_answer resolves the number instead.
+        interpreted = {"kind": "answer", "value": ""}
+    else:
+        interpreted = await interpret_slot_reply(
+            slot, reply, state.get("history"), get_extraction_model(),
+            locations=bookable, start_iso=slots.start_iso,
+        )
 
     if interpreted["kind"] == "question":
-        answer = await _answer_with_rag(reply, state)
+        answer = await _answer_with_rag(
+            reply, state,
+            "A booking is already in progress. Do not offer to book and do not end with "
+            "an offer of further help - the next question follows your answer.",
+        )
         return {"prompt_prefix": answer.get("response") or "Let's carry on with your booking."}
     if interpreted["kind"] == "unclear":
         return {"prompt_prefix": f"Sorry, I still need your {SLOT_LABELS[slot]}."}
@@ -257,27 +290,36 @@ def _price_line(slots: ReservationSlots, location: dict | None) -> str:
     return f"💶 Price: {price_label(price)}"
 
 
+def _normalise_reply(reply: str) -> tuple[str, list[str]]:
+    """Return a reply lowercased and stripped of end punctuation, plus its words."""
+    cleaned = reply.strip().lower().strip(".!,?")
+    return cleaned, re.findall(r"[a-z']+", cleaned)
+
+
 def _classify_reply(reply: str) -> str:
     """Read a confirmation reply as "yes", "no" or "unclear".
 
-    Matches the whole reply or just its first word, so "yes please" and "no thanks" are
-    understood while "not sure" stays unclear and is asked again rather than silently
-    cancelling the booking.
+    A leading yes or no decides only a short reply, so "yes please" and "no thanks" are
+    understood while "no, change the end time to 6pm" is a correction rather than a
+    cancellation, and "not sure" is asked again instead of silently dropping the booking.
     """
-    cleaned = reply.strip().lower().strip(".!,?")
-    words = re.findall(r"[a-z']+", cleaned)
-    first_word = words[0] if words else ""
-    if cleaned in AFFIRMATIVE_REPLIES or first_word in AFFIRMATIVE_REPLIES:
+    cleaned, words = _normalise_reply(reply)
+    if cleaned in AFFIRMATIVE_REPLIES:
         return "yes"
-    if cleaned in NEGATIVE_REPLIES or first_word in NEGATIVE_REPLIES:
+    if cleaned in NEGATIVE_REPLIES:
         return "no"
+    if len(words) <= 3:
+        first_word = words[0] if words else ""
+        if first_word in AFFIRMATIVE_REPLIES:
+            return "yes"
+        if first_word in NEGATIVE_REPLIES:
+            return "no"
     return "unclear"
 
 
 def _wants_to_cancel(reply: str) -> bool:
     """True if the user asked to abandon the booking, allowing "cancel please" etc."""
-    cleaned = reply.strip().lower().strip(".!,?")
-    words = re.findall(r"[a-z']+", cleaned)
+    cleaned, words = _normalise_reply(reply)
     return cleaned in CANCEL_REPLIES or (bool(words) and words[0] in CANCEL_REPLIES)
 
 

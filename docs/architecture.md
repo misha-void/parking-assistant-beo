@@ -148,6 +148,8 @@ over the labelled queries in `evaluation/eval_dataset.py`:
 | `MILVUS_DB_PATH` | Milvus Lite file. Not `MILVUS_URI`, which pymilvus reserves for its own HTTP connection |
 | `SMTP_*`, `ADMIN_EMAIL` | admin email; unset means the notification prints to the console |
 | `DATABASE_URL` | SQLite file; the test suite overrides it with a scratch database |
+| `MCP_RESERVATIONS_FILE` | file the service appends to (default `confirmed_reservations.txt`) |
+| `CHAT_LOG_DIR` | per-turn chat logs (default `.logs`) |
 
 ## 8. Stage mapping
 

@@ -13,6 +13,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
+from parking_assistant.rag.history import format_history
+
 logger = logging.getLogger(__name__)
 
 # Slots are asked in this order.
@@ -41,7 +43,10 @@ SLOT_LABELS = {
 _PLATE_PATTERN = re.compile(r"^(?=.*[0-9])[A-Z0-9-]{3,10}$", re.IGNORECASE)
 
 # Names are people's names, not sentences: letters, spaces, hyphens, apostrophes.
-_NAME_PATTERN = re.compile(r"^[^\W\d_][\w'’-]*(?: [^\W\d_][\w'’-]*){0,2}$", re.UNICODE)
+# [^\W\d_] is "a word character that is neither a digit nor an underscore", i.e. a
+# letter in any alphabet; plain \w would have accepted "Mika123" and "A_B".
+_NAME_WORD = r"[^\W\d_](?:[^\W\d_]|['’-])*"
+_NAME_PATTERN = re.compile(rf"^{_NAME_WORD}(?: {_NAME_WORD}){{0,2}}$", re.UNICODE)
 
 
 class ReservationSlots(BaseModel):
@@ -73,6 +78,14 @@ def is_valid_name(name: str) -> bool:
     return bool(name) and len(name) <= 40 and bool(_NAME_PATTERN.match(name))
 
 
+def format_moment(iso: str | None) -> str:
+    """Render an ISO timestamp the way a person reads it: 'Sat 7 Nov, 09:00'."""
+    moment = parse_iso(iso or "")
+    if not moment:
+        return iso or "—"
+    return f"{moment:%a} {moment.day} {moment:%b}, {moment:%H:%M}"
+
+
 def format_confirmation(slots: ReservationSlots, location_name: str, price_line: str) -> str:
     """Render the reservation summary shown before the user confirms."""
     # Two trailing spaces are a markdown hard line break; without them every field
@@ -82,20 +95,10 @@ def format_confirmation(slots: ReservationSlots, location_name: str, price_line:
         f"👤 Name: {slots.name} {slots.surname}  \n"
         f"🚗 Car: {slots.car_number}  \n"
         f"📍 Location: {location_name}  \n"
-        f"📅 Start: {slots.start_iso}  \n"
-        f"📅 End: {slots.end_iso}  \n"
+        f"📅 Start: {format_moment(slots.start_iso)}  \n"
+        f"📅 End: {format_moment(slots.end_iso)}  \n"
         f"{price_line}\n\n"
         "Is this correct? Reply 'yes' to confirm or 'no' to cancel."
-    )
-
-
-def format_history(history: list | None, limit: int = 6) -> str:
-    """Render the last few chat turns as plain text for a prompt."""
-    turns = (history or [])[-limit:]
-    if not turns:
-        return "(none)"
-    return "\n".join(
-        f"{turn.get('role', 'user').capitalize()}: {turn.get('content', '')}" for turn in turns
     )
 
 
@@ -133,7 +136,7 @@ async def infer_location_from_conversation(
     Returns the id of a location whose name the model echoed exactly, so a malformed or
     invented answer simply yields None instead of silently selecting the wrong location.
     """
-    conversation = f"{format_history(history)}\nUser (now): {current_message}"
+    conversation = f"{format_history(history) or "(none)"}\nUser (now): {current_message}"
     chain = _LOCATION_INFERENCE_PROMPT | llm | StrOutputParser()
     answer = (
         await chain.ainvoke(
@@ -216,7 +219,7 @@ async def interpret_slot_reply(
             {
                 "slot_label": SLOT_LABELS.get(slot, slot),
                 "reply": reply,
-                "conversation": format_history(history),
+                "conversation": format_history(history) or "(none)",
                 "slot_guidance": _slot_guidance(slot, locations, start_iso),
             }
         )
