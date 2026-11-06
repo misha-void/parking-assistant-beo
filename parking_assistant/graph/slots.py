@@ -76,13 +76,15 @@ def is_valid_name(name: str) -> bool:
 
 def format_confirmation(slots: ReservationSlots, location_name: str, price_line: str) -> str:
     """Render the reservation summary shown before the user confirms."""
+    # Two trailing spaces are a markdown hard line break; without them every field
+    # would be joined into a single run-on paragraph.
     return (
         "📋 **Reservation Summary**\n\n"
-        f"👤 Name: {slots.name} {slots.surname}\n"
-        f"🚗 Car: {slots.car_number}\n"
-        f"📍 Location: {location_name}\n"
-        f"📅 Start: {slots.start_iso}\n"
-        f"📅 End: {slots.end_iso}\n"
+        f"👤 Name: {slots.name} {slots.surname}  \n"
+        f"🚗 Car: {slots.car_number}  \n"
+        f"📍 Location: {location_name}  \n"
+        f"📅 Start: {slots.start_iso}  \n"
+        f"📅 End: {slots.end_iso}  \n"
         f"{price_line}\n\n"
         "Is this correct? Reply 'yes' to confirm or 'no' to cancel."
     )

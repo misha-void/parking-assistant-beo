@@ -7,10 +7,14 @@ import asyncio
 import uuid
 
 import streamlit as st
+from dotenv import load_dotenv
 
-from parking_assistant.admin.admin_agent import get_reservation_status
-from parking_assistant.service import process_chat_message
-from parking_assistant.session_registry import get_reservation
+# Load .env before importing anything that reads environment variables at import time.
+load_dotenv()
+
+from parking_assistant.admin.admin_agent import get_reservation_status  # noqa: E402
+from parking_assistant.service import process_chat_message  # noqa: E402
+from parking_assistant.session_registry import get_reservation  # noqa: E402
 
 # Statuses worth interrupting the user about, and how to phrase them.
 DECIDED_STATUSES = {"confirmed": "confirmed ✅", "cancelled": "refused ❌"}
@@ -63,18 +67,28 @@ for message in st.session_state.messages:
 
 if prompt := st.chat_input("How can I help you today?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    st.rerun()
 
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            reply = asyncio.run(
-                process_chat_message(
-                    user_message=prompt,
-                    session_id=st.session_state.session_id,
-                    chat_history=st.session_state.messages[:-1],
-                )
+# Answer whenever the last message is still the user's. Generating here rather than
+# inside the input block keeps the loop above the single place that renders messages,
+# so a reply is never drawn twice.
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+    with st.chat_message("assistant"), st.spinner("Thinking..."):
+        reply = asyncio.run(
+            process_chat_message(
+                user_message=st.session_state.messages[-1]["content"],
+                session_id=st.session_state.session_id,
+                chat_history=st.session_state.messages[:-1],
             )
-            st.markdown(reply)
-
+        )
     st.session_state.messages.append({"role": "assistant", "content": reply})
+
+    # If this reply already reported the outcome (the approval agent decides during the
+    # turn), record it so the watcher does not announce the same decision again.
+    reservation_id = get_reservation(st.session_state.session_id)
+    if reservation_id:
+        st.session_state.announced_statuses[reservation_id] = get_reservation_status(
+            reservation_id
+        )
+
+    st.rerun()

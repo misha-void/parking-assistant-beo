@@ -19,7 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from parking_assistant.admin.admin_agent import (
-    AUTO_APPROVE,
+    auto_approve_enabled,
     auto_review_reservation,
     escalate_to_admin,
     get_reservation_status,
@@ -345,7 +345,7 @@ async def request_approval(state: ChatState) -> dict:
         f"✅ Reservation #{reservation_id} submitted. An administrator will review it "
         "shortly — I'll let you know as soon as they decide."
     )
-    if not AUTO_APPROVE:
+    if not auto_approve_enabled():
         return {"response": pending_message}
 
     decision, reason = await auto_review_reservation(reservation_id, get_extraction_model())

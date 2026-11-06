@@ -9,6 +9,7 @@ Uses LangChain for summary and review generation; the notification is a
 pluggable tool (currently email, see notifier.py).
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -20,7 +21,15 @@ from parking_assistant.admin.notifier import send_admin_notification
 from parking_assistant.db.database import SessionLocal
 from parking_assistant.db.models import PriceRule, Reservation, ReservationStatus
 
-AUTO_APPROVE = os.getenv("AUTO_APPROVE", "true").lower() == "true"
+logger = logging.getLogger(__name__)
+
+def auto_approve_enabled() -> bool:
+    """True when the approval agent should decide instead of a human.
+
+    Read at call time on purpose: a module-level constant would capture the value
+    before .env is loaded, which silently ignored AUTO_APPROVE=false.
+    """
+    return os.getenv("AUTO_APPROVE", "true").strip().lower() == "true"
 
 SUMMARY_PROMPT = ChatPromptTemplate.from_template(
     "Summarize this parking reservation request for an administrator deciding whether to "
@@ -155,7 +164,14 @@ async def auto_review_reservation(reservation_id: int, llm) -> tuple[str, str]:
 
         decision, reason = parsed
         reservation.decision_reason = reason
-        _apply_decision(session, reservation, decision)
+        outcome = _apply_decision(session, reservation, decision)
+
+        # A confirmed booking that never reached the MCP server must not look like a
+        # clean success, so the problem is carried back in the reason the user sees.
+        if "WARNING" in outcome:
+            logger.warning("Reservation %s confirmed but not recorded: %s",
+                           reservation_id, outcome)
+            reason = f"{reason} (note: it could not be recorded to the MCP server)"
         return decision, reason
     except Exception:
         session.rollback()

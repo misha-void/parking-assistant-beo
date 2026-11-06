@@ -60,7 +60,7 @@ def patched_pipeline(review=("confirm", "Looks fine.")):
          patch(f"{PIPELINE}.interpret_slot_reply", new=fake_interpret), \
          patch(f"{PIPELINE}.infer_location_from_conversation", new=AsyncMock(return_value=None)), \
          patch(f"{PIPELINE}.escalate_to_admin", new=escalate), \
-         patch(f"{PIPELINE}.AUTO_APPROVE", True), \
+         patch(f"{PIPELINE}.auto_approve_enabled", return_value=True), \
          patch(f"{PIPELINE}.auto_review_reservation", new=reviewer):
         yield {"escalate": escalate, "review": reviewer}
 
