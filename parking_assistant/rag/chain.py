@@ -1,6 +1,6 @@
 """RAG chain orchestration: intent classification, retrieval and response generation."""
 
-from typing import Any, Dict
+from typing import Any
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -48,7 +48,7 @@ class RAGChain:
         if enable_guardrails:
             self.guardrail = get_guardrail()
 
-    async def _retrieve(self, intent: str, query: str) -> Dict[str, Any]:
+    async def _retrieve(self, intent: str, query: str) -> dict[str, Any]:
         """Run the retrieval strategy that matches the intent."""
         if intent == "pricing_hours":
             return await self.retriever.retrieve_pricing_hours(query)
@@ -60,7 +60,7 @@ class RAGChain:
 
     async def run(
         self, query: str, history: list = None, remembered_locations: list = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute full RAG pipeline.
 

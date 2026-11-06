@@ -1,6 +1,6 @@
 """Retrieval functions for RAG system - queries vector DB and SQL database."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from sqlalchemy import and_, func
 
@@ -14,7 +14,7 @@ def price_label(price) -> str:
     return f"{price} RSD/hour" if price else "price varies (private garage)"
 
 
-def format_location_line(loc: Dict[str, Any]) -> str:
+def format_location_line(loc: dict[str, Any]) -> str:
     """Render one location as '- name — address — price [— N spots]'."""
     address = loc.get("address", "address n/a")
     line = f"- {loc.get('name')} — {address} — {price_label(loc.get('price'))}"
@@ -25,12 +25,12 @@ def format_location_line(loc: Dict[str, Any]) -> str:
     return line
 
 
-def _rate_by_zone(session) -> Dict[Any, int]:
+def _rate_by_zone(session) -> dict[Any, int]:
     """Map each parking zone to its hourly rate in RSD."""
     return {rule.zone: rule.hourly_rate_rsd for rule in session.query(PriceRule).all()}
 
 
-def get_bookable_locations() -> List[Dict[str, Any]]:
+def get_bookable_locations() -> list[dict[str, Any]]:
     """All bookable locations with their hourly price (SQL only; None price for garages)."""
     session = SessionLocal()
     try:
@@ -48,7 +48,7 @@ def get_bookable_locations() -> List[Dict[str, Any]]:
         session.close()
 
 
-def _latest_availability_rows(session) -> List[Any]:
+def _latest_availability_rows(session) -> list[Any]:
     """One (ParkingLocation, Availability) row per location, using its latest snapshot."""
     latest = session.query(
         Availability.location_id,
@@ -76,7 +76,7 @@ def _latest_availability_rows(session) -> List[Any]:
     return list(unique_rows.values())
 
 
-def _location_summary(location, availability, rates) -> Dict[str, Any]:
+def _location_summary(location, availability, rates) -> dict[str, Any]:
     """Build the location dict returned to callers for one availability row."""
     return {
         "id": location.id,
@@ -100,7 +100,7 @@ class Retriever:
         """Close vector store connection."""
         self.vector_store.close()
 
-    async def retrieve_general_info(self, query: str, top_k: int = 3) -> Dict[str, Any]:
+    async def retrieve_general_info(self, query: str, top_k: int = 3) -> dict[str, Any]:
         """
         Retrieve general information from vector DB (zones, rules, FAQs, parking types).
 
@@ -124,7 +124,7 @@ class Retriever:
             "num_results": len(top_results),
         }
 
-    async def retrieve_pricing_hours(self, query: str) -> Dict[str, Any]:
+    async def retrieve_pricing_hours(self, query: str) -> dict[str, Any]:
         """Retrieve pricing and hours info: vector DB text, zone rates and per-location prices."""
         vector_results = self.vector_store.search(
             self.vector_store.COLLECTION_PRICING, query, top_k=2
@@ -157,7 +157,7 @@ class Retriever:
             "num_results": len(vector_results) + len(price_rules) + len(locations),
         }
 
-    async def retrieve_availability(self) -> Dict[str, Any]:
+    async def retrieve_availability(self) -> dict[str, Any]:
         """Return the latest availability and price of every parking location."""
         session = SessionLocal()
         try:
@@ -182,7 +182,7 @@ class Retriever:
             "num_results": len(locations),
         }
 
-    async def retrieve_hybrid(self, query: str) -> Dict[str, Any]:
+    async def retrieve_hybrid(self, query: str) -> dict[str, Any]:
         """Retrieve from both sources for mixed/complex queries."""
         vector_context = await self.retrieve_general_info(query, top_k=2)
         availability_context = await self.retrieve_availability()

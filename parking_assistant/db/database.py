@@ -30,15 +30,9 @@ def init_db():
 
     Note: For production, use Alembic migrations instead of create_all()
     """
-    # Imported for their side effect: this registers every model on Base.metadata
-    # so create_all() knows about them.  # noqa: F401
-    from parking_assistant.db.models import (
-        ParkingLocation,
-        PriceRule,
-        WorkingHours,
-        Availability,
-        Reservation
-    )
+    # Imported for the side effect: this registers every model on Base.metadata,
+    # so create_all() below knows which tables to create.
+    import parking_assistant.db.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     print("✅ Database initialized (all tables created)")

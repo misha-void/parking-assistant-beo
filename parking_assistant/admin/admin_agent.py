@@ -11,7 +11,7 @@ pluggable tool (currently email, see notifier.py).
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -109,7 +109,7 @@ def _apply_decision(session, reservation: Reservation, decision: str) -> str:
             name=f"{reservation.user_name} {reservation.user_surname}",
             car_number=reservation.car_number,
             reservation_period=f"{reservation.start_datetime} to {reservation.end_datetime}",
-            approval_time=datetime.now(timezone.utc).isoformat(),
+            approval_time=datetime.now(UTC).isoformat(),
         )
         if not recorded:
             message += " WARNING: could not record it to the MCP server (see server log)."

@@ -8,21 +8,27 @@ This script:
 4. Generates simulated availability snapshots
 """
 
-import sys
 import json
 import random
-from pathlib import Path
+import sys
 from datetime import datetime, time, timedelta
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from parking_assistant.db.database import init_db, SessionLocal
-from parking_assistant.db.models import (
-    ParkingLocation, ParkingType, ParkingZone,
-    PriceRule, WorkingHours, Availability, Reservation
-)
 from dotenv import load_dotenv
+
+from parking_assistant.db.database import SessionLocal, init_db
+from parking_assistant.db.models import (
+    Availability,
+    ParkingLocation,
+    ParkingType,
+    ParkingZone,
+    PriceRule,
+    Reservation,
+    WorkingHours,
+)
 
 load_dotenv()
 
@@ -143,7 +149,7 @@ def seed_parking_locations(session):
         print("  ⚠️  parking_locations.json not found!")
         return []
 
-    with open(json_path, "r", encoding="utf-8") as f:
+    with open(json_path, encoding="utf-8") as f:
         locations_data = json.load(f)
 
     locations = []

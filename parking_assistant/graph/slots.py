@@ -8,7 +8,6 @@ import json
 import logging
 import re
 from datetime import datetime
-from typing import Optional
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -48,12 +47,12 @@ _NAME_PATTERN = re.compile(r"^[^\W\d_][\w'’-]*(?: [^\W\d_][\w'’-]*){0,2}$", 
 class ReservationSlots(BaseModel):
     """The values collected for one reservation. Dates are ISO 8601 strings."""
 
-    name: Optional[str] = None
-    surname: Optional[str] = None
-    car_number: Optional[str] = None
-    location_id: Optional[int] = None
-    start_iso: Optional[str] = None
-    end_iso: Optional[str] = None
+    name: str | None = None
+    surname: str | None = None
+    car_number: str | None = None
+    location_id: int | None = None
+    start_iso: str | None = None
+    end_iso: str | None = None
 
     def missing_slots(self) -> list[str]:
         """Slot keys still empty, in the order they should be asked."""
@@ -90,7 +89,7 @@ def format_confirmation(slots: ReservationSlots, location_name: str, price_line:
     )
 
 
-def format_history(history: Optional[list], limit: int = 6) -> str:
+def format_history(history: list | None, limit: int = 6) -> str:
     """Render the last few chat turns as plain text for a prompt."""
     turns = (history or [])[-limit:]
     if not turns:
@@ -100,7 +99,7 @@ def format_history(history: Optional[list], limit: int = 6) -> str:
     )
 
 
-def _format_location_options(locations: Optional[list]) -> str:
+def _format_location_options(locations: list | None) -> str:
     """Render bookable locations with prices for a prompt."""
     if not locations:
         return "(none)"
@@ -127,8 +126,8 @@ Reply with the location's EXACT name from the list above, or NONE if it is not c
 
 
 async def infer_location_from_conversation(
-    history: Optional[list], current_message: str, locations: list, llm
-) -> Optional[int]:
+    history: list | None, current_message: str, locations: list, llm
+) -> int | None:
     """Infer which bookable location the conversation points at; return its id or None.
 
     Returns the id of a location whose name the model echoed exactly, so a malformed or
@@ -171,7 +170,7 @@ Decide what the reply is and return STRICT JSON, nothing else:
 """)
 
 
-def _slot_guidance(slot: str, locations: Optional[list], start_iso: Optional[str]) -> str:
+def _slot_guidance(slot: str, locations: list | None, start_iso: str | None) -> str:
     """Per-slot normalisation rules, so each prompt only carries what it needs."""
     today = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
     if slot in ("name", "surname"):
@@ -200,10 +199,10 @@ def _slot_guidance(slot: str, locations: Optional[list], start_iso: Optional[str
 async def interpret_slot_reply(
     slot: str,
     reply: str,
-    history: Optional[list],
+    history: list | None,
     llm,
-    locations: Optional[list] = None,
-    start_iso: Optional[str] = None,
+    locations: list | None = None,
+    start_iso: str | None = None,
 ) -> dict:
     """Classify one reservation reply and normalise its value.
 
@@ -234,7 +233,7 @@ async def interpret_slot_reply(
         return {"kind": "unclear", "value": ""}
 
 
-def parse_iso(value: Optional[str]) -> Optional[datetime]:
+def parse_iso(value: str | None) -> datetime | None:
     """Parse an ISO date-time, dropping any timezone so comparisons stay consistent."""
     try:
         parsed = datetime.fromisoformat((value or "").replace("Z", "+00:00"))

@@ -5,7 +5,6 @@ the only channel between them; the chat polls by the id recorded here. Restartin
 app clears it, which is acceptable for a demo.
 """
 
-from typing import Optional
 
 _reservation_by_session: dict[str, int] = {}
 
@@ -15,6 +14,6 @@ def set_reservation(session_id: str, reservation_id: int) -> None:
     _reservation_by_session[session_id] = reservation_id
 
 
-def get_reservation(session_id: str) -> Optional[int]:
+def get_reservation(session_id: str) -> int | None:
     """Return this session's reservation id, or None if it hasn't booked."""
     return _reservation_by_session.get(session_id)

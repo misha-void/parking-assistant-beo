@@ -1,7 +1,7 @@
 """Append-only chat logging for quality review. Writes JSONL to .logs/ (never breaks the chat)."""
 
-import os
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 

@@ -29,6 +29,9 @@ httpx==0.28.1
 pytest==8.4.0
 pytest-asyncio==0.25.2
 
+# Linting (config in pyproject.toml)
+ruff==0.17.4
+
 # Compatibility pins:
 # - setuptools>=81 dropped pkg_resources, which pymilvus still relies on
 # - marshmallow>=4 changed its API and breaks the 'environs' lib pulled in by pymilvus

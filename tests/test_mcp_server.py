@@ -1,6 +1,7 @@
 """Essential tests for Stage 3 - MCP server (confirmed reservation storage)."""
 
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 

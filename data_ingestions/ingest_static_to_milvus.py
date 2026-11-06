@@ -14,9 +14,10 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from parking_assistant.rag.vector_store import MilvusVectorStorage
-from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
+from parking_assistant.rag.vector_store import MilvusVectorStorage
 
 load_dotenv()
 
@@ -99,7 +100,7 @@ def ingest_static_data():
         print(f"📖 {filename} → {collection_name}")
 
         # Read file
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         # Chunk content

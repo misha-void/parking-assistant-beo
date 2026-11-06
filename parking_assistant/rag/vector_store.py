@@ -3,7 +3,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_openai import OpenAIEmbeddings
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
@@ -37,7 +37,7 @@ class MilvusVectorStorage:
         COLLECTION_FAQ
     ]
 
-    def __init__(self, embedding_model: Optional[OpenAIEmbeddings] = None):
+    def __init__(self, embedding_model: OpenAIEmbeddings | None = None):
         """
         Initialize Milvus connection and embedding model.
 
@@ -121,7 +121,7 @@ class MilvusVectorStorage:
     def insert_documents(
         self,
         collection_name: str,
-        texts: List[str],
+        texts: list[str],
         source_file: str
     ):
         """
@@ -160,7 +160,7 @@ class MilvusVectorStorage:
         collection_name: str,
         query: str,
         top_k: int = 5
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Semantic search in a collection.
 

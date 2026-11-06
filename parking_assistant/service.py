@@ -1,7 +1,6 @@
 """Chat service: a thin, fail-safe wrapper over the LangGraph pipeline."""
 
 import logging
-from typing import Optional
 
 from parking_assistant.chat_logger import log_turn
 from parking_assistant.graph.pipeline import run_turn
@@ -17,7 +16,7 @@ FRIENDLY_ERROR = (
 async def process_chat_message(
     user_message: str,
     session_id: str = "default",
-    chat_history: Optional[list[dict]] = None,
+    chat_history: list[dict] | None = None,
 ) -> str:
     """Handle one user message.
 

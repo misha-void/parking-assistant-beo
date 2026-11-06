@@ -1,7 +1,6 @@
 """Factory for the chat and embedding models used across the project."""
 
 import os
-from typing import Optional
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -12,7 +11,7 @@ CHAT_MODEL = "gpt-4o-mini"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 
-def _require_api_key(api_key: Optional[str]) -> str:
+def _require_api_key(api_key: str | None) -> str:
     """Return the OpenAI key, falling back to the environment."""
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key:
@@ -23,7 +22,7 @@ def _require_api_key(api_key: Optional[str]) -> str:
 def get_chat_model(
     model: str = CHAT_MODEL,
     temperature: float = 0.7,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> ChatOpenAI:
     """Conversational model; the warmer default suits free-text answers."""
     return ChatOpenAI(model=model, temperature=temperature, api_key=_require_api_key(api_key))
@@ -31,7 +30,7 @@ def get_chat_model(
 
 def get_extraction_model(
     model: str = CHAT_MODEL,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> ChatOpenAI:
     """Deterministic model for classification, parsing and value extraction.
 
@@ -43,7 +42,7 @@ def get_extraction_model(
 
 def get_embeddings(
     model: str = EMBEDDING_MODEL,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> OpenAIEmbeddings:
     """Embedding model backing the Milvus vector store."""
     return OpenAIEmbeddings(model=model, api_key=_require_api_key(api_key))

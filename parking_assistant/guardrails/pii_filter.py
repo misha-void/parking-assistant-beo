@@ -1,6 +1,5 @@
 """Guardrails for PII detection and filtering using Microsoft Presidio."""
 
-from typing import Dict, List, Tuple
 
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
@@ -48,7 +47,7 @@ class PIIGuardrail:
 
         self.language = language
 
-    def detect_pii(self, text: str, entities: List[str] = None) -> List[Dict]:
+    def detect_pii(self, text: str, entities: list[str] = None) -> list[dict]:
         """
         Detect PII entities in text.
 
@@ -79,7 +78,7 @@ class PIIGuardrail:
             for r in results
         ]
 
-    def anonymize_pii(self, text: str, entities: List[str] = None) -> Tuple[str, bool]:
+    def anonymize_pii(self, text: str, entities: list[str] = None) -> tuple[str, bool]:
         """
         Anonymize PII in text by replacing with placeholders.
 

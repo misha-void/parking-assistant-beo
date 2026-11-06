@@ -1,5 +1,7 @@
 """Tests for SQL database models and queries."""
 
+from sqlalchemy import func
+
 from parking_assistant.db.models import (
     Availability,
     ParkingLocation,
@@ -7,7 +9,6 @@ from parking_assistant.db.models import (
     ParkingZone,
     PriceRule,
 )
-from sqlalchemy import func
 
 
 def test_parking_locations_exist(db_session):
@@ -78,7 +79,7 @@ def test_availability_join(db_session):
 
     assert len(results) > 0, "No availability data found"
 
-    for name, capacity, available in results:
+    for _name, capacity, available in results:
         assert available <= capacity, f"Available spots ({available}) exceed capacity ({capacity})"
 
 
@@ -96,5 +97,5 @@ def test_complex_query(db_session):
     ).all()
 
     # Result depends on seed data, just check structure
-    for name, available in results:
+    for _name, available in results:
         assert available > 100

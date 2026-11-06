@@ -12,7 +12,7 @@ import logging
 import math
 import re
 from datetime import datetime
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -167,7 +167,7 @@ def _question_for(slot: str, bookable: list, prefix: str) -> str:
     return f"{prefix}\n\n{question}" if prefix else question
 
 
-def _match_location(value: str, reply: str, bookable: list) -> Optional[dict]:
+def _match_location(value: str, reply: str, bookable: list) -> dict | None:
     """Match a location by its exact name, or by the number shown in the list."""
     if value:
         for loc in bookable:
@@ -247,7 +247,7 @@ async def collect_slot(state: ChatState) -> dict:
     return {"slots": slots.model_dump(), "prompt_prefix": prefix}
 
 
-def _price_line(slots: ReservationSlots, location: Optional[dict]) -> str:
+def _price_line(slots: ReservationSlots, location: dict | None) -> str:
     """Hourly price plus an estimate for the requested period."""
     price = location["price"] if location else None
     start, end = parse_iso(slots.start_iso), parse_iso(slots.end_iso)
@@ -404,7 +404,7 @@ def _thread_config(session_id: str) -> dict:
     return {"configurable": {"thread_id": f"{session_id}:{generation}"}}
 
 
-def _pending_question(config: dict, result: dict) -> Optional[str]:
+def _pending_question(config: dict, result: dict) -> str | None:
     """The interrupt text the graph paused on, or None if the run finished."""
     interrupts = result.get("__interrupt__")
     if interrupts:
@@ -415,7 +415,7 @@ def _pending_question(config: dict, result: dict) -> Optional[str]:
     return None
 
 
-async def run_turn(session_id: str, user_input: str, history: Optional[list] = None) -> str:
+async def run_turn(session_id: str, user_input: str, history: list | None = None) -> str:
     """Advance the conversation by one user message and return the reply to show."""
     config = _thread_config(session_id)
     is_paused = bool(_compiled_graph.get_state(config).next)

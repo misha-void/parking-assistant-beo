@@ -12,7 +12,6 @@ Run it separately from the chat app:
 import os
 import secrets
 import threading
-from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
@@ -36,7 +35,7 @@ class ReservationRecord(BaseModel):
     approval_time: str
 
 
-def _verify_api_key(x_api_key: Optional[str]) -> None:
+def _verify_api_key(x_api_key: str | None) -> None:
     """Reject requests without a valid, constant-time-compared API key."""
     if not MCP_API_KEY or not x_api_key or not secrets.compare_digest(x_api_key, MCP_API_KEY):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -45,7 +44,7 @@ def _verify_api_key(x_api_key: Optional[str]) -> None:
 @app.post("/reservations/confirmed")
 def write_confirmed_reservation(
     record: ReservationRecord,
-    x_api_key: Optional[str] = Header(default=None),
+    x_api_key: str | None = Header(default=None),
 ):
     """Append a confirmed reservation to storage. Format: Name | Car | Period | Approval Time."""
     _verify_api_key(x_api_key)

@@ -14,6 +14,5 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from parking_assistant.evaluation.metrics import run_evaluation  # noqa: E402
 
-
 if __name__ == "__main__":
     asyncio.run(run_evaluation())
