@@ -208,22 +208,26 @@ def _match_location(value: str, reply: str, bookable: list) -> dict | None:
 def _store_moment(
     slot: str, value: str, slots: ReservationSlots, max_stay: int | None = None
 ) -> str:
-    """Validate and store a start/end date-time. Returns "" or a retry message."""
+    """Validate and store a start/end date-time. Returns "" or a retry message.
+
+    A retry message never ends with its own question: `_question_for` appends the slot
+    prompt after it, which would otherwise ask the user the same thing twice.
+    """
     moment = parse_iso(value)
     if not moment:
         return "I couldn't read that time. Try something like 'tomorrow at 5pm'."
     if moment < datetime.now():
-        return "That time is in the past. When would you like it instead?"
+        return "That time is in the past."
     if slot == "end_iso":
         start = parse_iso(slots.start_iso)
         if start and moment <= start:
-            return "The end must be after the start. When should it end?"
+            return "The end must be after the start."
         # Catch an over-long stay here rather than letting the approval agent refuse
         # the booking after the user has filled in everything.
         if start and max_stay and (moment - start) > timedelta(minutes=max_stay):
             return (
                 f"That zone allows a maximum stay of {format_minutes(max_stay)}, "
-                "so I can't book it for that long. When should it end?"
+                "so I can't book it for that long."
             )
     setattr(slots, slot, moment.isoformat())
     return ""
