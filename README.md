@@ -1,61 +1,36 @@
 # Parking Assistant — Belgrade
 
-AI chatbot for parking information and reservations in Belgrade, Serbia. Answers questions over a
-RAG knowledge base, runs an interactive reservation flow, escalates to an admin for approval, and
-records confirmed bookings via an MCP server — all orchestrated as a single **LangGraph** pipeline.
+A chat assistant for parking in Belgrade: it answers questions from a RAG knowledge base,
+walks the user through booking a spot, has an approval agent review the request, and records
+confirmed bookings through a small MCP service. Built as a four-stage course project.
 
-## Architecture
+The whole conversation is orchestrated as a single **LangGraph** graph — see
+[docs/architecture.md](docs/architecture.md) for the full design.
+
+## How it works
 
 ```
-          Streamlit UI (app.py)
-                  │  process_chat_message(session_id, text)
-                  ▼
-        LangGraph pipeline (parking_assistant/graph/pipeline.py)
-                  │
-   route_intent ──┼── (info question) ──► RAG agent ──► answer ──► END
-        │ (book_spot)
-        ▼
-     collect ◄─┐  one slot per turn via interrupt()  (name, surname,
-        │      └─ loop until complete                  car, location, dates)
-        ▼
-     confirm ── interrupt() "yes/no" ──► (no) END
-        │ (yes)
-        ▼
-      save  ── writes Reservation (PENDING_APPROVAL) to SQLite
-        │
-        ▼
-      admin ── escalate_to_admin() notifies admin (email, or console fallback) ──► END
-               "submitted for approval"
-
-   Out of band — admin_app.py (Streamlit):
-      admin reviews pending requests ──► Confirm/Refuse ──► status=CONFIRMED/CANCELLED
-                                                            ──► (on confirm) MCP server records it
+ app.py (chat) ──▶ service.py ──▶ graph/pipeline.py ─┬─ RAG answer ─────────────▶ END
+                                                     └─ collect slots (interrupts)
+                                                        ─▶ confirm ─▶ save
+                                                        ─▶ approval agent ──▶ MCP record
+ admin_app.py (human override) ─────────────────────────▶ confirm / refuse ──▶ MCP record
 ```
 
-The whole conversation is **one resumable graph run per session**. Each question to the user is a
-LangGraph `interrupt()`; the next message resumes the run from a checkpoint (`MemorySaver`). State
-lives in the checkpointer keyed by `session_id`, and recent chat history is threaded into the
-RAG/intent path for conversation memory, so the UI holds no conversation logic.
-
-### Components / agent & server logic
-
-- **RAG agent** (`rag/`): intent classification (5 intents) → retrieval (Milvus for static docs,
-  SQLite for dynamic data) → grounded answer. PII guardrail (Presidio) filters retrieved context.
-- **Reservation slot-filling** (`graph/slot_collector.py`): Pydantic `ReservationSlots`, car-plate
-  validation, LLM-based date parsing and location matching. Driven node-by-node by the graph.
-- **Admin approval** (`admin/`): `escalate_to_admin` generates an LLM summary and notifies the admin
-  (SMTP email, or prints to console if SMTP is unset). A human admin approves in **`admin_app.py`**
-  (a minimal Streamlit UI listing pending requests with slot details + Confirm/Refuse buttons), which
-  calls `decide_reservation` to set the status and, on confirm, record to the MCP server.
-  `record_decision` keeps the token-based confirm/refuse path (unit-tested).
-- **MCP server** (`mcp_server/`): API-key-protected FastAPI service that appends confirmed
-  reservations to a text file. The pipeline calls it via `mcp_server/client.py` (non-blocking if
-  unreachable, so approval is never blocked).
+- **Information Q&A** — intent classification picks the retrieval strategy: Milvus Lite for
+  static documents, SQLite for live availability and per-location prices.
+- **Booking** — six slots collected one question at a time. Each question is a LangGraph
+  `interrupt()`, so the next message resumes the same graph run. Asking a question
+  mid-booking gets answered, then the slot is asked again.
+- **Approval** — by default an LLM agent reviews the request and approves or refuses it with
+  a reason. Set `AUTO_APPROVE=false` to require the human in `admin_app.py` instead.
+- **Recording** — on confirmation the booking is posted to the MCP service, which appends
+  `Name | Car Number | Period | Approval Time` to a text file.
 
 ## Setup
 
 ```bash
-# 1. Python 3.12 virtual env (the ecosystem is not ready for 3.13+)
+# 1. Python 3.12 virtual environment
 python3.12 -m venv .venv && source .venv/bin/activate
 
 # 2. Dependencies
@@ -63,72 +38,83 @@ pip install -r requirements.txt
 python -m spacy download en_core_web_sm        # for the Presidio guardrail
 
 # 3. Environment
-cp .env.example .env                            # add OPENAI_API_KEY; MCP/SMTP vars optional
+cp .env.example .env                            # then add your OPENAI_API_KEY
 
-# 4. Initialize data
-python data_ingestions/seed_dynamic_db.py       # seed SQLite
-python data_ingestions/ingest_static_to_milvus.py  # embed static docs into Milvus
+# 4. Data
+python data_ingestions/seed_dynamic_db.py          # seed SQLite (safe to re-run)
+python data_ingestions/ingest_static_to_milvus.py  # embed the static docs into Milvus
 ```
-
-Relevant env vars: `OPENAI_API_KEY` (required); `MCP_SERVER_URL`, `MCP_API_KEY` (MCP recording);
-`SMTP_HOST/PORT/USER/PASSWORD`, `ADMIN_EMAIL`, `APP_BASE_URL` (email notifications — omit for console).
 
 ## Run
 
 ```bash
-# Start the MCP server (separate terminal) so confirmed bookings are recorded
+# Recording service (needs MCP_API_KEY set in .env)
 uvicorn mcp_server.main:app --port 8001
 
-# Start the chat UI
+# Chat UI
 streamlit run app.py
 
-# Start the admin approval UI (separate terminal) to confirm/refuse requests
+# Admin approval UI (the human override)
 streamlit run admin_app.py --server.port 8502
 ```
 
-Without the MCP server the chat still works; the recording step just logs that it was unreachable.
-When a user submits a reservation it becomes **pending**; approve it in the admin app to confirm and
-record it.
+Set `MCP_API_KEY` in `.env` before starting the MCP service: both the service and whichever
+process confirms a reservation read it, and the service rejects unauthenticated writes.
 
 ## Testing
 
 ```bash
-pytest tests/                        # unit tests (slots, DB, guardrails, admin, MCP)
-python scripts/run_evaluation.py     # RAG eval: Recall@K / Precision@K / latency
+pytest                                  # unit + integration of the graph; uses a scratch DB
+RUN_INTEGRATION_TESTS=1 pytest          # also runs the live Milvus/OpenAI tests
+python scripts/run_evaluation.py        # Recall@K / Precision@K / latency
 ```
+
+The default run needs no API key and does not touch the development database. The tests
+marked `integration` need `OPENAI_API_KEY` and ingested Milvus data, so they are skipped
+unless `RUN_INTEGRATION_TESTS=1`.
 
 ## Project structure
 
 ```
-app.py                     # Streamlit chat UI (user-facing)
-admin_app.py               # Streamlit admin UI (confirm/refuse pending reservations)
+app.py                      # Streamlit chat UI
+admin_app.py                # Streamlit admin approval UI
 parking_assistant/
 ├── graph/
-│   ├── pipeline.py        # LangGraph orchestration (Stage 4) — the pipeline above
-│   └── slot_collector.py  # reservation slots + validation/parsing helpers
-├── rag/                   # intent classifier, retriever, RAG chain
-├── guardrails/            # Presidio PII filtering
-├── admin/                 # admin approval agent + notifier
-├── evaluation/            # RAG metrics
-├── db/                    # SQLAlchemy models + session
-├── llm_factory.py         # pluggable chat/embedding model factory
-└── service.py             # thin wrapper: process_chat_message -> graph run_turn
-mcp_server/                # FastAPI MCP service + client
-data/                      # static docs (Milvus) + parking_locations.json (SQLite)
-data_ingestions/           # seed / ingest scripts
-tests/ · scripts/          # pytest suite · eval runner
+│   ├── pipeline.py         # the LangGraph conversation graph
+│   └── slots.py            # reservation slots + the LLM helpers that fill them
+├── rag/                    # intent classifier, retriever, RAG chain, history helper
+├── guardrails/             # Presidio PII filtering (context and output)
+├── admin/                  # approval agent + notifier
+├── evaluation/             # labelled dataset + Recall@K / Precision@K / latency
+├── db/                     # SQLAlchemy models and session
+├── llm_factory.py          # chat vs deterministic extraction models
+├── service.py              # fail-safe entry point used by the UI
+├── session_registry.py     # session → reservation, for status polling
+└── chat_logger.py          # appends each turn to .logs/ for review
+mcp_server/                 # FastAPI recording service + its client
+data/                       # static docs (Milvus) + parking_locations.json (SQLite)
+data_ingestions/            # seed and ingest scripts
+docs/architecture.md        # full architecture
+tests/ · scripts/           # pytest suite · evaluation runner
 ```
+
+## Configuration
+
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | required |
+| `AUTO_APPROVE` | `true` (default): the approval agent decides. `false`: wait for the admin app |
+| `MCP_SERVER_URL`, `MCP_API_KEY` | the recording service |
+| `MILVUS_DB_PATH` | Milvus Lite file (**not** `MILVUS_URI`, which pymilvus reserves) |
+| `SMTP_*`, `ADMIN_EMAIL` | admin email; unset prints the notification to the console |
 
 ## Stage status
 
-- [x] Stage 1 — RAG + chatbot, vector DB, reservation collection, guardrails, evaluation
-- [x] Stage 2 — Admin approval agent (LLM summary + email/console notify + approval token)
-- [x] Stage 3 — MCP server (writes confirmed reservations to file)
-- [x] Stage 4 — LangGraph orchestration of the full pipeline (chat → approval → MCP record)
+- [x] **Stage 1** — RAG + chatbot, vector DB, reservation collection, PII guardrails, evaluation
+- [x] **Stage 2** — Admin approval agent (LLM summary, notification, approve/refuse + reason)
+- [x] **Stage 3** — MCP service recording confirmed reservations to file
+- [x] **Stage 4** — LangGraph orchestration of the whole pipeline
 
-## Dependencies
-
-Python 3.12 · LangChain 0.3 / LangGraph 0.2 · OpenAI · Milvus Lite · SQLite + SQLAlchemy ·
-Presidio · Streamlit · FastAPI (MCP server only).
+Known limitations are listed in [docs/architecture.md](docs/architecture.md#9-known-limitations).
 
 Learning project — MIT License.

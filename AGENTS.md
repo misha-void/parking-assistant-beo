@@ -12,8 +12,10 @@ session before doing anything else.
 - **Goal**: Build an intelligent chatbot for parking lots in Serbia — info Q&A, reservation flow,
     human-in-the-loop confirmation. Built in 4 stages.
   - **Stage 2 (done)**: Admin approval agent (`parking_assistant/admin/`) — LangChain-generated
-    summary, email notification (console fallback if SMTP unset) with confirm/refuse links, decision
-    recorded via approval token.
+    summary, notification by email (console fallback if SMTP unset), and the decision applied
+    to the DB. An LLM approval agent simulates the administrator by default
+    (`AUTO_APPROVE=true`); `admin_app.py` is the human override. The old approval-token /
+    email-link flow was removed in the Stage 4 cleanup.
   - **Stage 3 (done)**: MCP server (`mcp_server/`) — FastAPI service, API-key protected, writes
     confirmed reservations to a text file (`Name | Car Number | Period | Approval Time`); admin agent
     notifies it via `mcp_server/client.py` (non-blocking if unreachable).
@@ -25,7 +27,11 @@ session before doing anything else.
 - **Static data**: Embedded into Milvus (general info, parking details, location, booking process docs).
 - **LLM/Embeddings**: OpenAI confirmed (e.g., `gpt-4o-mini` + `text-embedding-3-small`), behind a
   pluggable factory so other providers can be tested later for eval purposes.
-- **Guardrails**: Microsoft Presidio (pretrained NER + regex) for PII filtering on retrieved context
+- **Guardrails**: Microsoft Presidio filtering both retrieved context and generated output,
+  for real secrets only (email / card / IBAN / IP). PERSON, PHONE_NUMBER and LOCATION are
+  deliberately excluded: they false-positive on Belgrade street names and on the user's own
+  booking details (spot counts like "1800/2500" were once redacted as phone numbers). Applies to
+  retrieved context
   and LLM output.
 - **Evaluation**: Custom lightweight scripts — Recall@K, Precision@K, latency (p50/p95). RAGAS is a
   possible stretch goal later, not the default.
@@ -33,12 +39,20 @@ session before doing anything else.
 - **Interface**: Streamlit chat UI only (`app.py`). The standalone FastAPI chat backend (`api.py`)
   was removed in Stage 4 to keep the codebase concise; the MCP server remains a FastAPI service.
 - **Orchestration (Stage 4)**: the full conversation is a single LangGraph `StateGraph`
-  (`parking_assistant/graph/pipeline.py`) with an in-memory `MemorySaver` checkpointer. User prompts
-  are `interrupt()`s resumed per session; chat history is threaded into the RAG/intent path for
-  conversation memory. The `admin` node escalates (email, or console fallback) and ends the turn with
-  "submitted for approval". **Real human-in-the-loop approval** happens out of band in a Streamlit
-  admin app (`admin_app.py`, confirm/refuse buttons over `admin_agent.decide_reservation`); the MCP
-  recording happens on the admin's confirmation. `record_decision` keeps the token-based path.
+  (`parking_assistant/graph/pipeline.py`) with an in-memory `MemorySaver` checkpointer. Nodes:
+  `route_message` → `collect_slot`* → `confirm_with_user` → `save_reservation` →
+  `request_approval`. Every question to the user is an `interrupt()`, resumed per session;
+  chat history is threaded into the RAG/intent path. Reservation slots and their LLM helpers
+  live in `graph/slots.py`.
+- **Determinism**: `llm_factory.get_chat_model()` (temp 0.7) answers conversationally;
+  `get_extraction_model()` (temp 0) is used for classification, slot interpretation and the
+  approval review, so routing and extracted values are reproducible.
+- **Approval**: an LLM approval agent (`admin_agent.auto_review_reservation`) approves or
+  refuses with a stored reason, and the MCP recording happens on approval. `AUTO_APPROVE=false`
+  leaves everything to the human in `admin_app.py`.
+- **MCP caveat**: `mcp_server/` is a plain REST service fulfilling the MCP role, not a
+  Model Context Protocol implementation. OPEN: confirm against the course brief whether a
+  protocol-level MCP server is required.
 
 Any future decision that changes the above MUST be reflected back into this section by the agent.
 
@@ -110,8 +124,8 @@ these steps have happened for the corresponding piece of work.
 
 - `AGENTS.md` (this file) — process + running summary of confirmed architecture decisions.
   Update Section 0 whenever a cross-cutting decision changes.
-- `docs/decisions/` — one decision-spec markdown file per sub-task, per the Step 3 convention above.
-- `docs/architecture.md` — (to be created) living high-level architecture doc/diagram description,
+- Decision specs live **outside** this repo (see Step 3); there is no `docs/decisions/`.
+- `docs/architecture.md` — the living architecture doc (graph, agents, MCP service, guardrails,
   updated as stages progress — separate from the per-task decision specs.
 - Code lives under a proper package (e.g. `parking_assistant/`) rather than loose scripts at root;
   exact layout to be proposed and confirmed with the human as part of Stage 1 / Step 1 planning
@@ -125,7 +139,9 @@ these steps have happened for the corresponding piece of work.
       guardrails (PII filtering), evaluation (performance + accuracy).
 - [x] **Stage 2**: Admin approval agent (LangChain summary + email notify + approval token).
 - [x] **Stage 3**: MCP server (FastAPI, API-key protected, writes confirmed reservations to file).
-- [x] **Stage 4**: LangGraph orchestration of the full pipeline (chat → admin approval → MCP write).
+- [x] **Stage 4**: LangGraph orchestration of the full pipeline (chat → approval → MCP write),
+      plus a cleanup pass: dead code removed, PEP 8, `docs/architecture.md` written, real
+      Recall@K/Precision@K, output guardrail, tests on a scratch DB and green without an API key.
       Single `StateGraph` in `graph/pipeline.py`; interrupt-driven; conversation memory via chat
       history; real admin approval through `admin_app.py`; `service.py` reduced to a thin wrapper;
       `api.py` removed (Streamlit-only: `app.py` for chat, `admin_app.py` for approvals).
