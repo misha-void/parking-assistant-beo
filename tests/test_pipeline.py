@@ -11,8 +11,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from parking_assistant.db.models import ParkingLocation, Reservation, ReservationStatus
-from parking_assistant.graph.pipeline import run_turn
+from parking_assistant.db.models import (
+    ParkingLocation,
+    ParkingType,
+    PriceRule,
+    Reservation,
+    ReservationStatus,
+    max_stay_minutes,
+)
+from parking_assistant.graph.pipeline import _store_moment, run_turn
+from parking_assistant.graph.slots import ReservationSlots
 
 PIPELINE = "parking_assistant.graph.pipeline"
 
@@ -232,3 +240,33 @@ async def test_a_correction_at_confirmation_does_not_cancel_the_booking(db_sessi
         assert "approved" in final.lower()
 
     delete_test_reservation(db_session)
+
+
+def test_an_over_long_stay_is_refused_while_booking():
+    """The zone max stay is enforced as the end time is given, not only at approval."""
+    slots = ReservationSlots(start_iso="2030-01-01T10:00:00")
+
+    message = _store_moment("end_iso", "2030-01-01T18:00:00", slots, max_stay=180)
+    assert "maximum stay of 3 hours" in message
+    assert slots.end_iso is None  # nothing stored, so the slot is asked again
+
+    assert _store_moment("end_iso", "2030-01-01T13:00:00", slots, max_stay=180) == ""
+    assert slots.end_iso == "2030-01-01T13:00:00"
+
+
+def test_an_uncapped_location_takes_a_long_booking():
+    """Garages carry a zone for pricing only, so the street cap must not apply to them."""
+    slots = ReservationSlots(start_iso="2030-01-01T10:00:00")
+    assert _store_moment("end_iso", "2030-01-01T18:00:00", slots, max_stay=None) == ""
+
+
+def test_the_max_stay_rule_caps_street_parking_but_not_garages(db_session):
+    limits = {rule.zone: rule.max_duration_minutes for rule in db_session.query(PriceRule).all()}
+    by_type = {}
+    for location in db_session.query(ParkingLocation).all():
+        by_type.setdefault(location.type, location)
+
+    street = by_type.get(ParkingType.CAR_PARK)
+    garage = by_type.get(ParkingType.GARAGE)
+    assert max_stay_minutes(street, limits) == limits[street.zone]
+    assert max_stay_minutes(garage, limits) is None

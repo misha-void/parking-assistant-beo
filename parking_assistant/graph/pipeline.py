@@ -11,7 +11,7 @@ the run from its checkpoint, so the UI holds no conversation logic of its own.
 import logging
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -31,6 +31,7 @@ from parking_assistant.graph.slots import (
     SLOT_PROMPTS,
     ReservationSlots,
     format_confirmation,
+    format_minutes,
     infer_location_from_conversation,
     interpret_slot_reply,
     is_valid_name,
@@ -204,7 +205,9 @@ def _match_location(value: str, reply: str, bookable: list) -> dict | None:
     return None
 
 
-def _store_moment(slot: str, value: str, slots: ReservationSlots) -> str:
+def _store_moment(
+    slot: str, value: str, slots: ReservationSlots, max_stay: int | None = None
+) -> str:
     """Validate and store a start/end date-time. Returns "" or a retry message."""
     moment = parse_iso(value)
     if not moment:
@@ -215,6 +218,13 @@ def _store_moment(slot: str, value: str, slots: ReservationSlots) -> str:
         start = parse_iso(slots.start_iso)
         if start and moment <= start:
             return "The end must be after the start. When should it end?"
+        # Catch an over-long stay here rather than letting the approval agent refuse
+        # the booking after the user has filled in everything.
+        if start and max_stay and (moment - start) > timedelta(minutes=max_stay):
+            return (
+                f"That zone allows a maximum stay of {format_minutes(max_stay)}, "
+                "so I can't book it for that long. When should it end?"
+            )
     setattr(slots, slot, moment.isoformat())
     return ""
 
@@ -242,7 +252,8 @@ def _store_answer(slot: str, value: str, reply: str, slots: ReservationSlots,
             return ""
         return "I didn't recognise that location — give me its name or its number."
 
-    return _store_moment(slot, value, slots)
+    chosen = next((loc for loc in bookable if loc["id"] == slots.location_id), None)
+    return _store_moment(slot, value, slots, chosen.get("max_stay_minutes") if chosen else None)
 
 
 async def collect_slot(state: ChatState) -> dict:

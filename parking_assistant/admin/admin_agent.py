@@ -19,7 +19,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from parking_assistant.admin.mcp_client import send_confirmed_reservation
 from parking_assistant.admin.notifier import send_admin_notification
 from parking_assistant.db.database import SessionLocal
-from parking_assistant.db.models import PriceRule, Reservation, ReservationStatus
+from parking_assistant.db.models import (
+    PriceRule,
+    Reservation,
+    ReservationStatus,
+    max_stay_minutes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +49,14 @@ SUMMARY_PROMPT = ChatPromptTemplate.from_template(
 REVIEW_PROMPT = ChatPromptTemplate.from_template(
     "You are a parking administrator reviewing a reservation request. Approve it unless "
     "something is clearly wrong: the period is in the past, the end is not after the start, "
-    "the booking is implausibly long (more than 24 hours), or the name or car plate is "
-    "obviously fake.\n\n"
+    "the booking is implausibly long (more than 24 hours), the duration exceeds the "
+    "maximum stay stated below, or the name or car plate is obviously fake.\n\n"
     "Current time: {now}\n"
     "Guest name: {name} {surname}\n"
     "Car plate: {car_number}\n"
     "Location: {location}\n"
     "Zone / price: {price}\n"
+    "Maximum stay: {max_stay}\n"
     "Start: {start}\n"
     "End: {end}\n"
     "Duration: {hours:.1f} hours\n\n"
@@ -67,6 +73,15 @@ def _price_text(session, reservation: Reservation) -> str:
         return "no street zone / not specified"
     rule = session.query(PriceRule).filter(PriceRule.zone == zone).first()
     return f"{zone.value}, {rule.hourly_rate_rsd} RSD/h" if rule else zone.value
+
+
+def _max_stay_text(session, reservation: Reservation) -> str:
+    """State the location's maximum stay for the reviewer, in minutes."""
+    if reservation.location is None:
+        return "unknown"
+    limits = {rule.zone: rule.max_duration_minutes for rule in session.query(PriceRule).all()}
+    minutes = max_stay_minutes(reservation.location, limits)
+    return f"{minutes} minutes" if minutes else "no limit (garage, booked by the hour)"
 
 
 async def _generate_summary(reservation: Reservation, llm) -> str:
@@ -153,6 +168,7 @@ async def auto_review_reservation(reservation_id: int, llm) -> tuple[str, str]:
                 "car_number": reservation.car_number,
                 "location": reservation.location.name,
                 "price": _price_text(session, reservation),
+                "max_stay": _max_stay_text(session, reservation),
                 "start": reservation.start_datetime,
                 "end": reservation.end_datetime,
                 "hours": duration.total_seconds() / 3600,

@@ -184,3 +184,17 @@ class Reservation(Base):
             f"<Reservation(id={self.id}, user={self.user_name} {self.user_surname}, "
             f"status={self.status.value})>"
         )
+
+
+def max_stay_minutes(location: ParkingLocation, limits: dict) -> int | None:
+    """The maximum stay for one location in minutes, or None when it is not capped.
+
+    `limits` maps a zone to its PriceRule.max_duration_minutes. The cap is a
+    street-parking rule: a car may not occupy a zone bay for longer than this. Every
+    seeded location carries a zone because the zone sets the price, so applying the cap
+    everywhere would put a 30-minute limit on a multi-storey garage — that is the
+    pricing rule leaking into a different concept. Garages are booked by the hour.
+    """
+    if location.type != ParkingType.CAR_PARK or location.zone is None:
+        return None
+    return limits.get(location.zone)

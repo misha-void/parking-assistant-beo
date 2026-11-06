@@ -5,7 +5,12 @@ from typing import Any
 from sqlalchemy import and_, func
 
 from parking_assistant.db.database import SessionLocal
-from parking_assistant.db.models import Availability, ParkingLocation, PriceRule
+from parking_assistant.db.models import (
+    Availability,
+    ParkingLocation,
+    PriceRule,
+    max_stay_minutes,
+)
 from parking_assistant.rag.vector_store import MilvusVectorStorage
 
 
@@ -42,17 +47,27 @@ def _rate_by_zone(session) -> dict[Any, int]:
     return {rule.zone: rule.hourly_rate_rsd for rule in session.query(PriceRule).all()}
 
 
+def _max_stay_by_zone(session) -> dict[Any, int]:
+    """Map each parking zone to its maximum stay in minutes."""
+    return {rule.zone: rule.max_duration_minutes for rule in session.query(PriceRule).all()}
+
+
+
+
+
 def get_bookable_locations() -> list[dict[str, Any]]:
     """All bookable locations with their hourly price (SQL only; None price for garages)."""
     session = SessionLocal()
     try:
         rates = _rate_by_zone(session)
+        limits = _max_stay_by_zone(session)
         return [
             {
                 "id": location.id,
                 "name": location.name,
                 "address": location.address,
                 "price": rates.get(location.zone) if location.zone else None,
+                "max_stay_minutes": max_stay_minutes(location, limits),
             }
             for location in session.query(ParkingLocation).all()
         ]

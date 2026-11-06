@@ -22,6 +22,8 @@ The whole conversation is orchestrated as a single **LangGraph** graph — see
 - **Booking** — six slots collected one question at a time. Each question is a LangGraph
   `interrupt()`, so the next message resumes the same graph run. Asking a question
   mid-booking gets answered, then the slot is asked again; saying "cancel" abandons it.
+  Street-parking zones have a maximum stay (30 min to 3 h), checked as the end time is
+  given; garages are booked by the hour.
 - **Approval** — by default an LLM agent reviews the request and approves or refuses it with
   a reason. Set `AUTO_APPROVE=false` to require the human in `admin_app.py` instead.
 - **Recording** — on confirmation the booking is posted to the MCP service, which appends

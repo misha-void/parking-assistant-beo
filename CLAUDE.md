@@ -32,7 +32,13 @@ and `README.md` for setup and run commands.
   reproducible.
 - **Approval**: an LLM agent (`admin_agent.auto_review_reservation`) approves or refuses with a
   stored reason, and the MCP recording happens on approval. `AUTO_APPROVE=false` hands every
-  decision to the human in `admin_app.py`.
+  decision to the human in `admin_app.py`. It checks the period, the duration, the zone's
+  maximum stay and whether the name or plate looks fake — nothing else, because nothing else
+  is in its prompt.
+- **Maximum stay**: `PriceRule.max_duration_minutes` is a *street-parking* rule and
+  `db.models.max_stay_minutes` applies it to `CAR_PARK` locations only. Every seeded location
+  carries a zone because the zone sets the price, so applying the cap everywhere would put a
+  30-minute limit on a multi-storey garage.
 - **Guardrails**: Presidio filters retrieved context *and* generated output, for real secrets only
   (email / card / IBAN / IP). PERSON, PHONE_NUMBER and LOCATION are deliberately excluded — they
   false-positive on Belgrade street names and on the user's own booking details (spot counts like

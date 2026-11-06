@@ -87,8 +87,12 @@ turn.
 
 **Approval agent** (`admin/admin_agent.auto_review_reservation`). Simulates the human
 administrator: an LLM reviews the request and replies `APPROVE` or `REFUSE` plus a short
-reason, which is stored on the reservation and shown to the user. Unparseable output
-leaves the reservation pending for a human. Controlled by `AUTO_APPROVE` (default `true`);
+reason, which is stored on the reservation and shown to the user. It is given the current
+time, the guest and plate, the location with its zone and rate, the period, the duration
+and the zone's maximum stay, and it judges exactly what those support: a period in the
+past, an end before the start, an implausible length, a stay over the zone maximum, and
+an obviously fake name or plate. Unparseable output leaves the reservation pending for a
+human. Controlled by `AUTO_APPROVE` (default `true`);
 with it off, reservations simply wait for the admin app.
 
 **Human override.** `admin_app.py` lists pending requests with their details and price and
@@ -167,4 +171,6 @@ over the labelled queries in `evaluation/eval_dataset.py`:
 - The status notification needs the chat tab to stay open; there is no push channel.
 - A submitted reservation cannot be edited or cancelled by the user.
 - No availability or double-booking check: a booking does not reserve a physical space.
+- The approval agent judges only the fields listed above. It cannot check opening hours,
+  capacity or overlapping bookings.
 - `admin_app.py` has no authentication — anyone who can reach the port can approve.

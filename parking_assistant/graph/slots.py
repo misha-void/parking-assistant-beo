@@ -86,6 +86,15 @@ def format_moment(iso: str | None) -> str:
     return f"{moment:%a} {moment.day} {moment:%b}, {moment:%H:%M}"
 
 
+def format_minutes(minutes: int) -> str:
+    """Render a duration in minutes as '30 minutes', '1 hour' or '2.5 hours'."""
+    if minutes < 60:
+        return f"{minutes} minutes"
+    hours = minutes / 60
+    shown = int(hours) if hours.is_integer() else round(hours, 1)
+    return f"{shown} hour" if shown == 1 else f"{shown} hours"
+
+
 def format_confirmation(slots: ReservationSlots, location_name: str, price_line: str) -> str:
     """Render the reservation summary shown before the user confirms."""
     # Two trailing spaces are a markdown hard line break; without them every field
